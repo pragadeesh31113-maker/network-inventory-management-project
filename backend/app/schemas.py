@@ -1,0 +1,143 @@
+# backend/app/schemas.py
+from pydantic import BaseModel, EmailStr
+from typing import List, Optional
+from .models import UserRole, AssetType, AssetStatus # Import our enums
+
+# --- User & Auth Schemas ---
+class UserBase(BaseModel):
+    email: EmailStr
+    full_name: Optional[str] = None
+
+class UserCreate(UserBase):
+    username: str
+    password: str
+    role: UserRole
+
+class UserSignUp(BaseModel): # Special for customer sign up
+    email: EmailStr
+    username: str
+    password: str
+    full_name: str
+    address: str # We'll create the CustomerProfile from this
+
+class User(UserBase):
+    id: int
+    username: str
+    role: UserRole
+    is_active: bool
+
+    class Config:
+        from_attributes = True # Tells Pydantic to read data even if it's not a dict (e.g., ORM object)
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+class TokenData(BaseModel):
+    username: Optional[str] = None
+
+# --- Asset Schemas ---
+class AssetBase(BaseModel):
+    model: Optional[str] = None
+    asset_type: AssetType
+    location: Optional[str] = None
+
+class AssetCreate(AssetBase):
+    serial_number: str
+    status: AssetStatus = AssetStatus.AVAILABLE
+
+class Asset(AssetBase):
+    id: int
+    serial_number: str
+    status: AssetStatus
+    assigned_to_customer_id: Optional[int] = None
+
+    class Config:
+        orm_mofrom_attributesde = True
+
+# --- Schemas for Sprints 2, 3, 4 ---
+# We'll add these here now so you don't get import errors later.
+
+# --- Hierarchy Schemas (Sprint 2) ---
+class CustomerProfileSimple(BaseModel): # To nest inside splitter
+    id: int
+    user_id: int
+    address: str
+    status: str
+    splitter_port: Optional[int]
+    
+    class Config:
+        from_attributes = True
+
+class SplitterBase(BaseModel):
+    name: str
+    port_capacity: int = 8
+    location: Optional[str] = None
+    
+class SplitterCreate(SplitterBase):
+    fdh_id: int
+
+class Splitter(SplitterBase):
+    id: int
+    fdh_id: int
+    customers: List[CustomerProfileSimple] = [] # Show connected customers
+    
+    class Config:
+        from_attributes = True
+
+class FDHBase(BaseModel):
+    name: str
+    location: Optional[str] = None
+    region: Optional[str] = None
+
+class FDHCreate(FDHBase):
+    pass
+
+class FDH(FDHBase):
+    id: int
+    splitters: List[Splitter] = [] # Show child splitters
+    
+    class Config:
+        from_attributes = True
+
+# --- Onboarding Schemas (Sprint 2) ---
+class CustomerOnboardRequest(BaseModel):
+    customer_profile_id: int # The profile of the customer to onboard
+    splitter_id: int
+    splitter_port: int
+
+# --- Task Schemas (Sprint 3) ---
+class TaskNote(BaseModel):
+    notes: str
+
+class TaskStatusUpdate(BaseModel):
+    status: str # "IN_PROGRESS", "COMPLETED", "FAILED"
+
+class Task(BaseModel): # A full task schema for responses
+    id: int
+    status: str
+    notes: Optional[str]
+    customer: CustomerProfileSimple
+    
+    class Config:
+        from_attributes = True
+
+# --- Customer Portal Schemas (Sprint 4) ---
+class MyAsset(BaseModel):
+    model: Optional[str]
+    asset_type: AssetType
+    serial_number: str
+    
+    class Config:
+        from_attributes = True
+
+class MyProfile(BaseModel):
+    full_name: Optional[str]
+    email: EmailStr
+    address: Optional[str]
+    plan: Optional[str]
+    status: Optional[str]
+    assigned_assets: List[MyAsset]
+    
+    class Config:
+        from_attributes = True
