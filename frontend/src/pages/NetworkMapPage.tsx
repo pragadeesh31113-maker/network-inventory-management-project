@@ -33,7 +33,7 @@ const nodeTypes = {
   customerONTNode: CustomerONTNode, customerRouterNode: CustomerRouterNode,
 };
 
-// ELK Layout Options
+//viswa
 const elkOptions = {
   'elk.algorithm': 'layered',
   'elk.layered.spacing.nodeNodeBetweenLayers': '100',
