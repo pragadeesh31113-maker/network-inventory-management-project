@@ -30,6 +30,24 @@ class AssetStatus(str, enum.Enum):
     IN_REPAIR = "IN_REPAIR"
     RETIRED = "RETIRED"
 
+class AssetHistory(Base):
+    __tablename__ = "asset_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    asset_id = Column(Integer, ForeignKey("assets.id"), nullable=False)
+    timestamp = Column(DateTime(timezone=True), default=datetime.datetime.now(datetime.timezone.utc))
+    
+    # The action performed, e.g., "CREATED", "STATUS_CHANGE", "ASSIGNED"
+    action = Column(String(100), nullable=False) 
+    
+    # Details of the change, e.g., "Status changed from AVAILABLE to FAULTY"
+    details = Column(String, nullable=True) 
+    
+    # Who made the change?
+    changed_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True) # Nullable for system actions
+    
+    asset = relationship("Asset", back_populates="history")
+    changed_by_user = relationship("User")
 # --- MODELS ---
 
 class User(Base):
@@ -59,7 +77,7 @@ class Asset(Base):
     # Relationship: Which customer is this asset assigned to?
     assigned_to_customer_id = Column(Integer, ForeignKey("customer_profiles.id"), nullable=True)
     customer = relationship("CustomerProfile", back_populates="assigned_assets")
-
+    history = relationship("AssetHistory", back_populates="asset", cascade="all, delete-orphan")
 class CustomerProfile(Base):
     __tablename__ = "customer_profiles"
     id = Column(Integer, primary_key=True, index=True)

@@ -1,4 +1,5 @@
 # backend/app/schemas.py
+import datetime
 from pydantic import BaseModel, EmailStr
 from typing import List, Optional
 from .models import UserRole, AssetType, AssetStatus # Import our enums
@@ -53,7 +54,30 @@ class Asset(AssetBase):
     assigned_to_customer_id: Optional[int] = None
 
     class Config:
-        orm_mofrom_attributesde = True
+        from_attributes = True  # <-- THIS WAS THE SYNTAX ERROR
+
+# --- THIS IS THE NEW CLASS YOU WERE MISSING ---
+# --- THIS IS THE NEW CLASS YOU WERE MISSING ---
+class AssetUpdate(BaseModel):
+    model: Optional[str] = None
+    location: Optional[str] = None
+    status: Optional[AssetStatus] = None # <-- FIX: Removed 'models.'
+    assigned_to_customer_id: Optional[int] = None
+# ---------------------------------------------
+
+
+class AssetHistoryBase(BaseModel):
+    timestamp: datetime.datetime
+    action: str
+    details: Optional[str] = None
+
+class AssetHistory(AssetHistoryBase):
+    id: int
+    asset_id: int
+    changed_by_user_id: Optional[int] = None
+
+    class Config:
+        from_attributes = True # Replaces orm_mode
 
 # --- Schemas for Sprints 2, 3, 4 ---
 # We'll add these here now so you don't get import errors later.

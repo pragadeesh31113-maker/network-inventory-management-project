@@ -7,6 +7,7 @@ from ..database import get_db
 
 router = APIRouter()
 
+# --- CORRECT ---
 @router.get("/pending", response_model=List[schemas.CustomerProfileSimple])
 def get_pending_onboarding_customers(
     db: Session = Depends(get_db),
@@ -14,7 +15,7 @@ def get_pending_onboarding_customers(
 ):
     """Get all customers who signed up but are not yet assigned to a splitter."""
     customers = db.query(models.CustomerProfile).filter(
-        # We'll change this status in the signup logic
+        # It should ONLY show this one status
         models.CustomerProfile.status == "PENDING_ONBOARDING" 
     ).all()
     return customers

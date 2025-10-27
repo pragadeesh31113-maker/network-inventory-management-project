@@ -4,7 +4,7 @@ import { Box, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
-// Icons
+// Icons (same as before)
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import InventoryIcon from '@mui/icons-material/Inventory';
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
@@ -15,7 +15,6 @@ import LogoutIcon from '@mui/icons-material/Logout';
 
 const drawerWidth = 240;
 
-// Define our navigation items
 const navItems = [
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/', roles: ['ADMIN', 'PLANNER'] },
   { text: 'Onboarding', icon: <AssignmentIndIcon />, path: '/onboarding', roles: ['PLANNER'] },
@@ -35,7 +34,6 @@ export const InternalLayout = ({ children }: { children: ReactNode }) => {
     navigate('/login');
   };
 
-  // Filter nav items based on user's role
   const allowedNavItems = navItems.filter(item => 
     user && item.roles.includes(user.role)
   );
@@ -71,10 +69,24 @@ export const InternalLayout = ({ children }: { children: ReactNode }) => {
             {allowedNavItems.map((item) => (
               <ListItem key={item.text} disablePadding>
                 <ListItemButton
-                  selected={location.pathname === item.path}
+                  selected={location.pathname === item.path} // <-- This highlights the active page
                   onClick={() => navigate(item.path)}
+                  sx={{
+                    // --- This is the new style for the selected item ---
+                    '&.Mui-selected': {
+                      backgroundColor: 'rgba(63, 81, 181, 0.15)', // Faded blue
+                      borderRight: '3px solid',
+                      borderColor: 'primary.main',
+                      fontWeight: 'bold',
+                    },
+                    '&:hover': {
+                       backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                    }
+                  }}
                 >
-                  <ListItemIcon>{item.icon}</ListItemIcon>
+                  <ListItemIcon sx={{ color: location.pathname === item.path ? 'primary.main' : 'inherit' }}>
+                    {item.icon}
+                  </ListItemIcon>
                   <ListItemText primary={item.text} />
                 </ListItemButton>
               </ListItem>
@@ -92,8 +104,8 @@ export const InternalLayout = ({ children }: { children: ReactNode }) => {
         component="main"
         sx={{ flexGrow: 1, bgcolor: 'background.default', p: 3 }}
       >
-        <Toolbar /> {/* This is a spacer for the top AppBar */}
-        {children} {/* This is where our page (e.g., PlannerDashboard) will render */}
+        <Toolbar /> 
+        {children} 
       </Box>
     </Box>
   );
