@@ -99,7 +99,9 @@ class SplitterBase(BaseModel):
     name: str
     port_capacity: int = 8
     location: Optional[str] = None
-
+    pincode: Optional[str] = None # <-- Add
+    district: Optional[str] = None # <-- Add
+    region: Optional[str] = None # <-- Add
 class SplitterCreate(SplitterBase):
     fdh_id: int
 
@@ -128,6 +130,11 @@ class FDH(FDHBase):
     class Config:
         from_attributes = True
 
+class FDHUpdate(BaseModel):
+    location: Optional[str] = None
+    pincode: Optional[str] = None
+    district: Optional[str] = None
+    region: Optional[str] = None
 # --- Onboarding Schemas (Sprint 2) ---
 class CustomerOnboardRequest(BaseModel):
     customer_profile_id: int # The profile of the customer to onboard
