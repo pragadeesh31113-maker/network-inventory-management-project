@@ -84,13 +84,14 @@ class AssetHistory(AssetHistoryBase):
 # We'll add these here now so you don't get import errors later.
 
 # --- Hierarchy Schemas (Sprint 2) ---
-class CustomerProfileSimple(BaseModel): # To nest inside splitter
+class CustomerProfileSimple(BaseModel): # To nest inside splitter/pending list
     id: int
     user_id: int
     address: str
     status: str
     splitter_port: Optional[int]
-    
+    pincode: Optional[str] = None # <-- *** ADD/ENSURE THIS LINE EXISTS ***
+
     class Config:
         from_attributes = True
 
@@ -98,15 +99,15 @@ class SplitterBase(BaseModel):
     name: str
     port_capacity: int = 8
     location: Optional[str] = None
-    
+
 class SplitterCreate(SplitterBase):
     fdh_id: int
 
 class Splitter(SplitterBase):
     id: int
     fdh_id: int
-    customers: List[CustomerProfileSimple] = [] # Show connected customers
-    
+    customers: List[CustomerProfileSimple] = []
+
     class Config:
         from_attributes = True
 
@@ -114,14 +115,16 @@ class FDHBase(BaseModel):
     name: str
     location: Optional[str] = None
     region: Optional[str] = None
+    district: Optional[str] = None # <-- Add district
+    pincode: Optional[str] = None  # <-- Add pincode
 
 class FDHCreate(FDHBase):
     pass
 
 class FDH(FDHBase):
     id: int
-    splitters: List[Splitter] = [] # Show child splitters
-    
+    splitters: List[Splitter] = []
+
     class Config:
         from_attributes = True
 

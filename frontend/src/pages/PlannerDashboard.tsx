@@ -1,50 +1,29 @@
 // frontend/src/pages/PlannerDashboard.tsx
 import React, { useState, useEffect } from 'react';
 import api from '../api';
-import { 
-  Box, Typography, Paper, Grid, List, ListItem, ListItemText, 
-  Button, CircularProgress, Alert, Accordion, AccordionSummary, 
-  AccordionDetails, Select, MenuItem, FormControl, InputLabel 
+import {
+  Box, Typography, Paper, Grid, List, ListItem, ListItemText,
+  Button, CircularProgress, Alert, Accordion, AccordionSummary,
+  AccordionDetails, Select, MenuItem, FormControl, InputLabel, SelectChangeEvent // Import SelectChangeEvent
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import SuggestionIcon from '@mui/icons-material/LightbulbOutlined'; // Icon for suggestions
-// --- Define our data types ---
+import SuggestionIcon from '@mui/icons-material/LightbulbOutlined';
+
+// --- Define data types ---
 interface Customer {
   id: number;
   user_id: number;
   address: string;
   status: string;
   splitter_port: number | null;
-  pincode?: string;
+  pincode?: string; // Ensure pincode is expected
 }
+interface Splitter { id: number; name: string; port_capacity: number; customers: Customer[]; }
+interface FDH { id: number; name: string; location: string; splitters: Splitter[]; pincode?: string; district?: string; region?: string; } // Added location fields
+interface PortSuggestion { fdh_id: number; fdh_name: string; splitter_id: number; splitter_name: string; port_number: number; }
 
-interface Splitter {
-  id: number;
-  name: string;
-  port_capacity: number;
-  customers: Customer[];
-}
-
-interface FDH {
-  id: number;
-  name: string;
-  location: string;
-  splitters: Splitter[];
-}
-interface PortSuggestion {
-    fdh_id: number;
-    fdh_name: string;
-    splitter_id: number;
-    splitter_name: string;
-    port_number: number;
-}
-// --- Onboarding Form Component (nested in the same file) ---
-
-interface OnboardingFormProps {
-  customer: Customer;
-  fdhs: FDH[];
-  onSuccess: () => void; // Function to refresh data on success
-}
+// --- Onboarding Form Component ---
+interface OnboardingFormProps { customer: Customer; fdhs: FDH[]; onSuccess: () => void; }
 
 const OnboardingForm: React.FC<OnboardingFormProps> = ({ customer, fdhs, onSuccess }) => {
   const [selectedFdhId, setSelectedFdhId] = useState<string>('');
@@ -52,90 +31,155 @@ const OnboardingForm: React.FC<OnboardingFormProps> = ({ customer, fdhs, onSucce
   const [selectedPort, setSelectedPort] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [suggestions, setSuggestions] = useState<PortSuggestion[]>([]); // <-- State for suggestions
+  const [suggestions, setSuggestions] = useState<PortSuggestion[]>([]);
   const [suggestionLoading, setSuggestionLoading] = useState(false);
+
   const selectedFdh = fdhs.find(f => f.id === Number(selectedFdhId));
   const selectedSplitter = selectedFdh?.splitters.find(s => s.id === Number(selectedSplitterId));
 
   const getAvailablePorts = () => {
     if (!selectedSplitter) return [];
-    
-    const usedPorts = new Set(selectedSplitter.customers.map(c => c.splitter_port));
-    const allPorts = Array.from({ length: selectedSplitter.port_capacity }, (_, i) => i + 1);
-    
+    const usedPorts = new Set(selectedSplitter.customers.map(c => c.splitter_port).filter(p => p !== null));
+    const capacity = selectedSplitter.port_capacity || 8;
+    const allPorts = Array.from({ length: capacity }, (_, i) => i + 1);
     return allPorts.filter(port => !usedPorts.has(port));
   };
 
-const handleSuggestPorts = async () => {
+  const handleSuggestPorts = async () => {
     setSuggestionLoading(true);
-    setSuggestions([]); // Clear previous suggestions
+    setSuggestions([]);
     setError('');
     try {
       const res = await api.get(`/onboard/suggest_port/${customer.id}`);
       setSuggestions(res.data);
-      // Optionally pre-fill if only one suggestion
       if (res.data.length === 1) {
-          const sug = res.data[0];
-          setSelectedFdhId(String(sug.fdh_id));
-          // Need a slight delay for splitter dropdown to populate based on FDH
-          setTimeout(() => {
-             setSelectedSplitterId(String(sug.splitter_id));
-             // Delay again for port dropdown
-             setTimeout(() => {
-                setSelectedPort(String(sug.port_number));
-             }, 50);
-          }, 50);
+        const sug = res.data[0];
+        setSelectedFdhId(String(sug.fdh_id));
+        setTimeout(() => { // Delay for dependent dropdown state update
+          setSelectedSplitterId(String(sug.splitter_id));
+          setTimeout(() => { setSelectedPort(String(sug.port_number)); }, 50);
+        }, 50);
       }
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to get port suggestions.');
+      // Safe Error Handling
+      let errorMessage = 'Failed to get port suggestions.';
+      if (err.response?.data?.detail) {
+        const detail = err.response.data.detail;
+        errorMessage = typeof detail === 'string' ? detail : (Array.isArray(detail) && detail[0]?.msg ? detail[0].msg : JSON.stringify(detail));
+      }
+      setError(errorMessage);
     } finally {
       setSuggestionLoading(false);
     }
   };
-const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault(); // Stop the form from reloading the page
+
+  // --- *** ADDED/ENSURED handleSubmit IS PRESENT *** ---
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     setError('');
     setLoading(true);
-    
     try {
       const payload = {
         customer_profile_id: customer.id,
         splitter_id: Number(selectedSplitterId),
         splitter_port: Number(selectedPort),
       };
-      
       await api.post('/onboard/', payload);
-      onSuccess(); // Tell the parent (PlannerDashboard) to refetch data
-      
+      onSuccess(); // Callback to refresh parent data
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Onboarding failed.');
+      // Safe Error Handling
+      let errorMessage = 'Onboarding failed.';
+      if (err.response?.data?.detail) {
+        const detail = err.response.data.detail;
+        errorMessage = typeof detail === 'string' ? detail : (Array.isArray(detail) && detail[0]?.msg ? detail[0].msg : JSON.stringify(detail));
+      }
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
   };
-  // ---------------------------------
+  // ----------------------------------------------------
+
+  // Handler for Select changes
+   const handleSelectChange = (event: SelectChangeEvent) => {
+       const { name, value } = event.target;
+       if (name === 'fdh') {
+           setSelectedFdhId(value);
+           setSelectedSplitterId(''); // Reset child dropdowns
+           setSelectedPort('');
+       } else if (name === 'splitter') {
+           setSelectedSplitterId(value);
+           setSelectedPort(''); // Reset child dropdown
+       } else if (name === 'port') {
+           setSelectedPort(value);
+       }
+   };
 
   return (
-    <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2, p: 2, border: '1px solid #333', borderRadius: '4px' }}>
+    <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-         <Typography variant="h6">Assign: {customer.address} (Pincode: {customer.pincode || 'N/A'})</Typography> {/* Show pincode */}
-         {/* --- NEW: Suggest Button --- */}
-         <Button
-            variant="outlined"
-            size="small"
-            startIcon={suggestionLoading ? <CircularProgress size={16} /> : <SuggestionIcon />}
-            onClick={handleSuggestPorts}
-            disabled={suggestionLoading || !customer.pincode}
-         >
-            Suggest Ports
-         </Button>
-         {/* ------------------------- */}
+        <Typography variant="h6">Assign: {customer.address} (Pincode: {customer.pincode || 'N/A'})</Typography>
+        <Button
+          variant="outlined" size="small"
+          startIcon={suggestionLoading ? <CircularProgress size={16} /> : <SuggestionIcon />}
+          onClick={handleSuggestPorts}
+          disabled={suggestionLoading || !customer.pincode} // Button enabled if pincode exists
+        >
+          Suggest Ports
+        </Button>
       </Box>
-      <Grid container spacing={2}>
-        {/* ... (FDH, Splitter, Port Select dropdowns remain the same) ... */}
-      </Grid>
 
-      {/* --- NEW: Display Suggestions --- */}
+      {/* --- *** ENSURE DROPDOWNS ARE PRESENT *** --- */}
+      <Grid container spacing={2}>
+        <Grid item xs={12} sm={4}>
+          <FormControl fullWidth size="small">
+            <InputLabel>1. Select FDH</InputLabel>
+            <Select
+              name="fdh" // Added name
+              value={selectedFdhId}
+              label="1. Select FDH"
+              onChange={handleSelectChange} // Use combined handler
+            >
+              {fdhs.map((fdh) => (
+                <MenuItem key={fdh.id} value={fdh.id}>{fdh.name} ({fdh.location})</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Grid>
+        <Grid item xs={12} sm={4}>
+          <FormControl fullWidth disabled={!selectedFdh} size="small">
+            <InputLabel>2. Select Splitter</InputLabel>
+            <Select
+              name="splitter" // Added name
+              value={selectedSplitterId}
+              label="2. Select Splitter"
+              onChange={handleSelectChange} // Use combined handler
+            >
+              {selectedFdh?.splitters.map((splitter) => (
+                <MenuItem key={splitter.id} value={splitter.id}>{splitter.name}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Grid>
+        <Grid item xs={12} sm={4}>
+          <FormControl fullWidth disabled={!selectedSplitter} size="small">
+            <InputLabel>3. Select Port</InputLabel>
+            <Select
+              name="port" // Added name
+              value={selectedPort}
+              label="3. Select Port"
+              onChange={handleSelectChange} // Use combined handler
+            >
+              {getAvailablePorts().map((port) => (
+                <MenuItem key={port} value={port}>Port {port}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Grid>
+      </Grid>
+      {/* ------------------------------------------ */}
+
+      {/* --- Display Suggestions --- */}
       {suggestions.length > 0 && (
         <Box sx={{ mt: 2 }}>
           <Typography variant="subtitle2">Suggestions:</Typography>
@@ -143,16 +187,13 @@ const handleSubmit = async (e: React.FormEvent) => {
             {suggestions.map((sug, index) => (
               <ListItem
                 key={index}
-                button
-                onClick={() => { // Click suggestion to pre-fill
-                    setSelectedFdhId(String(sug.fdh_id));
-                    // Need delays again for dependent dropdowns
-                    setTimeout(() => {
-                       setSelectedSplitterId(String(sug.splitter_id));
-                       setTimeout(() => {
-                          setSelectedPort(String(sug.port_number));
-                       }, 50);
-                    }, 50);
+                button // Make it look clickable
+                onClick={() => {
+                  setSelectedFdhId(String(sug.fdh_id));
+                  setTimeout(() => {
+                    setSelectedSplitterId(String(sug.splitter_id));
+                    setTimeout(() => { setSelectedPort(String(sug.port_number)); }, 50);
+                  }, 50);
                 }}
               >
                 <ListItemText primary={`${sug.fdh_name} -> ${sug.splitter_name} -> Port ${sug.port_number}`} />
@@ -161,7 +202,6 @@ const handleSubmit = async (e: React.FormEvent) => {
           </List>
         </Box>
       )}
-      {/* ----------------------------- */}
 
       {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
       <Button type="submit" variant="contained" sx={{ mt: 2 }} disabled={!selectedPort || loading}>
@@ -172,29 +212,31 @@ const handleSubmit = async (e: React.FormEvent) => {
 };
 
 // --- Main Planner Dashboard Component ---
-
 export const PlannerDashboard: React.FC = () => {
   const [pendingCustomers, setPendingCustomers] = useState<Customer[]>([]);
-  const [fdhs, setFdhs] = useState<FDH[]>([]);
+  const [fdhs, setFdhs] = useState<FDH[]>([]); // This holds FDH data for dropdowns AND hierarchy view
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  
-  // This state tracks which customer is currently being onboarded
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
 
   const fetchData = async () => {
     setLoading(true);
     setError('');
     try {
-      // Fetch both data streams in parallel
-      const [customerRes, fdhRes] = await Promise.all([
-        api.get('/onboard/pending'),
-        api.get('/hierarchy/fdh')
-      ]);
+      // Fetch pending customers (ensure pincode is included)
+      const customerRes = await api.get('/onboard/pending');
+      // Fetch hierarchy (ensure FDHs have location fields)
+      const fdhRes = await api.get('/hierarchy/fdh');
+
+      // Basic validation
+      if (!Array.isArray(customerRes.data)) throw new Error("Invalid customer data received");
+      if (!Array.isArray(fdhRes.data)) throw new Error("Invalid FDH data received");
+
       setPendingCustomers(customerRes.data);
       setFdhs(fdhRes.data);
-    } catch (err) {
-      setError('Failed to fetch data.');
+    } catch (err: any) {
+       console.error("Fetch data error:", err);
+       setError(err.message || 'Failed to fetch initial dashboard data.');
     } finally {
       setLoading(false);
     }
@@ -203,100 +245,101 @@ export const PlannerDashboard: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, []);
-  
+
   const handleOnboardSuccess = () => {
     setSelectedCustomerId(null); // Close the form
-    fetchData(); // Refresh all data
+    fetchData(); // Refresh both customer list and hierarchy view
   };
 
   if (loading) return <CircularProgress />;
-  if (error) return <Alert severity="error">{error}</Alert>;
+
+  // Find the selected customer object (make sure it includes pincode)
+  const selectedCustomerData = selectedCustomerId ? pendingCustomers.find(c => c.id === selectedCustomerId) : null;
 
   return (
     <Grid container spacing={3}>
-      
-      {/* --- Column 1: Pending Customers --- */}
+      {/* Column 1: Pending Customers */}
       <Grid item xs={12} md={5}>
         <Typography variant="h5" gutterBottom>Pending Onboarding</Typography>
-        <Paper sx={{ maxHeight: '80vh', overflow: 'auto', p: 1 }}>
+         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>} {/* Show fetch errors here */}
+        <Paper sx={{ maxHeight: 'calc(80vh - 100px)', overflow: 'auto', p: 1 }}> {/* Adjusted height */}
           <List>
-            {pendingCustomers.length === 0 && (
+            {pendingCustomers.length === 0 && !loading && (
               <ListItem><ListItemText primary="No pending customers." /></ListItem>
             )}
             {pendingCustomers.map((customer) => (
-              <ListItem
-                divider
-                key={customer.id}
+              <ListItem divider key={customer.id}
                 secondaryAction={
-                  <Button 
-                    variant="outlined" 
-                    size="small"
-                    onClick={() => setSelectedCustomerId(customer.id)}
-                  >
-                    Assign
-                  </Button>
+                  <Button variant="outlined" size="small"
+                    onClick={() => { setSelectedCustomerId(customer.id); setError(''); }} // Clear errors on assign click
+                  > Assign </Button>
                 }
               >
-                <ListItemText 
-                  primary={customer.address} 
-                  secondary={`Status: ${customer.status}`} 
+                <ListItemText
+                  primary={customer.address}
+                  secondary={`Pincode: ${customer.pincode || 'N/A'} | Status: ${customer.status}`} // Show pincode here too
                 />
               </ListItem>
             ))}
           </List>
         </Paper>
-        
+
         {/* Render the Onboarding form if a customer is selected */}
-        {selectedCustomerId && (
-          <OnboardingForm 
-            customer={pendingCustomers.find(c => c.id === selectedCustomerId)!}
-            fdhs={fdhs}
+        {selectedCustomerData && ( // Use the found customer data object
+          <OnboardingForm
+            customer={selectedCustomerData} // Pass the full customer object
+            fdhs={fdhs} // Pass FDH data for dropdowns
             onSuccess={handleOnboardSuccess}
           />
         )}
       </Grid>
-      
-      {/* --- Column 2: Network Hierarchy --- */}
+
+      {/* Column 2: Network Hierarchy */}
       <Grid item xs={12} md={7}>
-        <Typography variant="h5" gutterBottom>Network Hierarchy</Typography>
+        <Typography variant="h5" gutterBottom>Network Hierarchy View</Typography>
         <Paper sx={{ maxHeight: '80vh', overflow: 'auto', p: 1 }}>
           {fdhs.map((fdh) => (
-            <Accordion key={fdh.id} sx={{ mb: 1 }}>
+            <Accordion key={`hierarchy-fdh-${fdh.id}`} sx={{ mb: 1 }}>
               <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                <Typography variant="h6">{fdh.name} ({fdh.location})</Typography>
+                {/* Display more FDH details if available */}
+                <Typography variant="h6">{fdh.name} ({fdh.district ? `${fdh.district} - ${fdh.location}` : fdh.location || 'N/A'}) Pincode: {fdh.pincode || 'N/A'}</Typography>
               </AccordionSummary>
               <AccordionDetails>
                 {fdh.splitters.map((splitter) => {
                   const used = splitter.customers.length;
-                  const capacity = splitter.port_capacity;
+                  const capacity = splitter.port_capacity || 8;
                   return (
-                    <Accordion key={splitter.id} defaultExpanded>
+                    <Accordion key={`hierarchy-splitter-${splitter.id}`} defaultExpanded>
                       <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                        <Typography>
-                          {splitter.name} (Load: {used} / {capacity})
-                        </Typography>
+                        <Typography>{splitter.name} (Load: {used}/{capacity})</Typography>
                       </AccordionSummary>
                       <AccordionDetails>
                         <List dense>
                           {splitter.customers.map((cust) => (
-                            <ListItem key={cust.id}>
-                              <ListItemText 
-                                primary={`Port ${cust.splitter_port}: ${cust.address}`} 
-                                secondary={`Status: ${cust.status}`} 
+                            <ListItem key={`hierarchy-cust-${cust.id}`}>
+                              <ListItemText
+                                primary={`Port ${cust.splitter_port}: ${cust.address}`}
+                                secondary={`Status: ${cust.status}`} // Device type isn't in this fdh data, only status
                               />
                             </ListItem>
                           ))}
                           {splitter.customers.length === 0 && (
-                             <ListItem><ListItemText primary="No customers assigned." /></ListItem>
+                             <ListItem><ListItemText primary="No customers assigned to this splitter." /></ListItem>
                           )}
                         </List>
                       </AccordionDetails>
                     </Accordion>
-                  )
+                  );
                 })}
+                 {fdh.splitters.length === 0 && (
+                     <Typography sx={{ p: 1, fontStyle: 'italic', color: 'text.secondary' }}>No splitters found for this FDH.</Typography>
+                 )}
               </AccordionDetails>
             </Accordion>
           ))}
+           {fdhs.length === 0 && !loading && (
+               <Typography sx={{ p: 2, fontStyle: 'italic', color: 'text.secondary' }}>No FDH data available.</Typography>
+           )}
         </Paper>
       </Grid>
     </Grid>
