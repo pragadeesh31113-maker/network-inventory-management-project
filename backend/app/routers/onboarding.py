@@ -1,9 +1,10 @@
 # backend/app/routers/onboarding.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional # Make sure Optional is imported
 from .. import schemas, models, deps
 from ..database import get_db
+from sqlalchemy import and_
 
 router = APIRouter()
 
@@ -41,10 +42,11 @@ def onboard_customer(
     if not splitter:
         raise HTTPException(status_code=404, detail="Splitter not found")
 
-    # Check if port is valid and available
-    if not (0 < onboard_request.splitter_port <= splitter.port_capacity):
-        raise HTTPException(status_code=400, detail=f"Port must be between 1 and {splitter.port_capacity}")
+    # Check if port is valid
+    if not (0 < onboard_request.splitter_port <= (splitter.port_capacity or 8)):
+        raise HTTPException(status_code=400, detail=f"Port must be between 1 and {splitter.port_capacity or 8}")
 
+    # Check if port is available
     port_taken = db.query(models.CustomerProfile).filter(
         models.CustomerProfile.splitter_id == splitter.id,
         models.CustomerProfile.splitter_port == onboard_request.splitter_port
@@ -98,3 +100,57 @@ def onboard_customer(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"An error occurred: {e}")
+
+# --- **NEW SUGGESTION ENDPOINT** ---
+@router.get("/suggest_port/{customer_profile_id}", response_model=List[schemas.PortSuggestion])
+def suggest_available_port(
+    customer_profile_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(deps.is_planner)
+):
+    """Suggest available splitter ports in the same pincode as the customer."""
+    customer_profile = db.query(models.CustomerProfile).filter(models.CustomerProfile.id == customer_profile_id).first()
+    
+    # Check if customer and pincode exist
+    if not customer_profile:
+        raise HTTPException(status_code=404, detail="Customer profile not found.")
+    if not customer_profile.pincode:
+        raise HTTPException(status_code=404, detail="Customer has no pincode assigned. Cannot make suggestions.")
+
+    customer_pincode = customer_profile.pincode
+
+    # Find FDHs in the same pincode
+    nearby_fdhs = db.query(models.FDH).filter(models.FDH.pincode == customer_pincode).all()
+    if not nearby_fdhs:
+        return [] # No FDHs found in this pincode
+
+    suggestions = []
+    max_suggestions = 10 # Limit the number of suggestions
+
+    for fdh in nearby_fdhs:
+        # Find splitters within these FDHs
+        splitters_in_fdh = db.query(models.Splitter).filter(models.Splitter.fdh_id == fdh.id).all()
+
+        for splitter in splitters_in_fdh:
+            # Get ports currently used by ANY customer on this splitter
+            used_ports_query = db.query(models.CustomerProfile.splitter_port).filter(
+                models.CustomerProfile.splitter_id == splitter.id,
+                models.CustomerProfile.splitter_port != None # noqa E711
+            )
+            used_ports = {port for (port,) in used_ports_query.all()} # Create a set of port numbers
+
+            capacity = splitter.port_capacity or 8 # Default to 8 if not set
+            for port_num in range(1, capacity + 1):
+                if port_num not in used_ports:
+                    # This port is free, add it to suggestions
+                    suggestions.append(schemas.PortSuggestion(
+                        fdh_id=fdh.id,
+                        fdh_name=fdh.name,
+                        splitter_id=splitter.id,
+                        splitter_name=splitter.name,
+                        port_number=port_num
+                    ))
+                    if len(suggestions) >= max_suggestions:
+                        return suggestions # Return early if max reached
+
+    return suggestions

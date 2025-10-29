@@ -21,7 +21,7 @@ class UserSignUp(BaseModel): # Special for customer sign up
     full_name: str
     address: str # We'll create the CustomerProfile from this
     pincode:str
-    
+
 class User(UserBase):
     id: int
     username: str
@@ -147,6 +147,13 @@ class Task(BaseModel): # A full task schema for responses
     class Config:
         from_attributes = True
 
+class PortSuggestion(BaseModel):
+    fdh_id: int
+    fdh_name: str
+    splitter_id: int
+    splitter_name: str
+    port_number: int
+    
 # --- Customer Portal Schemas (Sprint 4) ---
 class MyAsset(BaseModel):
     model: Optional[str]
