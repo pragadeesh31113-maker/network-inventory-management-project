@@ -20,7 +20,8 @@ class UserSignUp(BaseModel): # Special for customer sign up
     password: str
     full_name: str
     address: str # We'll create the CustomerProfile from this
-
+    pincode:str
+    
 class User(UserBase):
     id: int
     username: str

@@ -83,6 +83,7 @@ class CustomerProfile(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), unique=True)
     address = Column(String)
+    pincode = Column(String(6), index=True, nullable=True) # Added pincode
     plan = Column(String)
     status = Column(String, default="PENDING_INSTALLATION") # e.g., PENDING, ACTIVE, INACTIVE
     
@@ -100,6 +101,7 @@ class FDH(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True)
     location = Column(String)
+    pincode = Column(String(6), index=True, nullable=True)
     region = Column(String)
     splitters = relationship("Splitter", back_populates="fdh")
 

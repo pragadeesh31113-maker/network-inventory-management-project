@@ -55,9 +55,10 @@ def customer_signup(
     # Create associated customer profile
     # --- CORRECT ---
     new_profile = models.CustomerProfile(
-    user_id=new_user.id,
-    address=user_in.address,
-    status="PENDING_ONBOARDING" # <-- This is the correct status
+        user_id=new_user.id,
+        address=user_in.address,
+        pincode=user_in.pincode, # <-- Save the pincode
+        status="PENDING_ONBOARDING"
 )
     db.add(new_profile)
     db.commit()
