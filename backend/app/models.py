@@ -16,7 +16,6 @@ class UserRole(str, enum.Enum):
 class AssetType(str, enum.Enum):
     ONT = "ONT"
     ROUTER = "ROUTER"
-    # Add other types like FDH, SPLITTER if you manage them as assets
     FDH = "FDH"
     SPLITTER = "SPLITTER"
 
@@ -83,6 +82,8 @@ class Asset(Base):
     # Relationship to AssetHistory
     history = relationship("AssetHistory", back_populates="asset", cascade="all, delete-orphan")
 
+# backend/app/models.py
+
 class AssetHistory(Base):
     __tablename__ = "asset_history"
     id = Column(Integer, primary_key=True, index=True)
@@ -103,7 +104,9 @@ class Splitter(Base):
     port_capacity = Column(Integer, default=8)
     location = Column(String, nullable=True)
     fdh_id = Column(Integer, ForeignKey("fdhs.id"), nullable=False)
-
+    pincode = Column(String(6), index=True, nullable=True)  # <-- Add pincode
+    district = Column(String, index=True, nullable=True) # <-- Add district
+    region = Column(String, index=True, nullable=True)   # <-- Add region
     # --- Relationships ---
     fdh = relationship("FDH", back_populates="splitters")
     customers = relationship("CustomerProfile", back_populates="splitter") # Customers connected
