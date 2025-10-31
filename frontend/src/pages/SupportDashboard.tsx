@@ -52,7 +52,7 @@ export const SupportDashboard: React.FC = () => {
     setError('');
     setSelectedCustomer(null);
     try {
-      const res = await api.get(`/customers/search?q=${searchTerm}`);
+      const res = await api.get(`/api/customers/search?q=${searchTerm}`);
       setResults(res.data);
     } catch (err) {
       setError('Search failed.');
@@ -67,7 +67,7 @@ export const SupportDashboard: React.FC = () => {
     setError('');
     setSelectedCustomerId(customerId);
     try {
-      const res = await api.get(`/customers/${customerId}/details`);
+      const res = await api.get(`/api/customers/${customerId}/details`);
       setSelectedCustomer(res.data);
     } catch (err) {
       setError('Failed to fetch customer details.');
@@ -81,7 +81,7 @@ export const SupportDashboard: React.FC = () => {
     if (!selectedCustomerId) return;
     setLoading(true);
     try {
-      await api.post(`/lifecycle/deactivate/${selectedCustomerId}`);
+      await api.post(`/api/lifecycle/deactivate/${selectedCustomerId}`);
       handleSelectCustomer(selectedCustomerId); // Refresh details
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Deactivation failed.');

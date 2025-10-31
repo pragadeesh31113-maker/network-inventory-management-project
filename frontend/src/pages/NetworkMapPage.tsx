@@ -78,7 +78,7 @@ export const NetworkMapPage: React.FC = () => {
       setLoading(true);
       setError('');
       try {
-        const res = await api.get('/hierarchy/fdh');
+        const res = await api.get('/api/hierarchy/fdh');
         // Basic validation of received data structure (optional but good practice)
         if (!Array.isArray(res.data)) {
             throw new Error("Invalid data format received from API.");

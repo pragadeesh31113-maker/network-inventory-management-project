@@ -60,7 +60,7 @@ interface SummaryData {
   by_type: { name: string, value: number }[];
 }
 
-// This MUST match the FDH schema returned by your /api/hierarchy/{id} endpoint
+// This MUST match the FDH schema returned by youpoint
 interface FDHHierarchyDetails {
   id: number; // This is the Asset ID
   name: string; // This is the FDH (asset) serial_number or model
@@ -124,8 +124,8 @@ export const InventoryPage: React.FC = () => {
     try {
       // Use the correct API routes we found
       const [summaryResponse, assetsResponse] = await Promise.all([
-        api.get<SummaryData>('/assets/summary'),
-        api.get<Asset[]>('/assets/') 
+        api.get<SummaryData>('/api/assets/summary'),
+        api.get<Asset[]>('/api/assets/') 
       ]);
 
       setSummary(summaryResponse.data);
@@ -169,8 +169,8 @@ export const InventoryPage: React.FC = () => {
       setFdhLoading(true);
       setFdhLocationDialogOpen(true);
       try {
-        // Use the /api/hierarchy/ route we found
-        const response = await api.get<FDHHierarchyDetails>(`/hierarchy/${asset.id}`);
+        // Use tharchy/ route we found
+        const response = await api.get<FDHHierarchyDetails>(`/api/hierarchy/${asset.id}`);
         setFdhLocationData(response.data);
       } catch (err: any) {
         setError('Failed to load FDH location data.');
@@ -206,11 +206,11 @@ export const InventoryPage: React.FC = () => {
     setError('');
     try {
       if (isEditMode) {
-        // Update existing asset - /api/assets/{asset_id}
-        await api.put(`/assets/${currentAsset.id}`, currentAsset);
+        // Update existing asset -ssets/{asset_id}
+        await api.put(`/api/assets/${currentAsset.id}`, currentAsset);
       } else {
-        // Create new asset - /api/assets/
-        await api.post('/assets/', currentAsset);
+        // Create new asset ssets/
+        await api.post('/api/assets/', currentAsset);
       }
       handleClose(); // Close dialog
       fetchData();   // Refresh data in the table
@@ -224,8 +224,8 @@ export const InventoryPage: React.FC = () => {
     setError('');
     setFdhLoading(true);
     try {
-      // Use the /api/hierarchy/ route
-      await api.put(`/hierarchy/${fdhLocationData.id}`, fdhLocationData);
+      // Use theroute
+      await api.put(`/api/hierarchy/${fdhLocationData.id}`, fdhLocationData);
       handleClose();
       fetchData(); // Refresh all data
     } catch (err: any) {
@@ -240,7 +240,7 @@ export const InventoryPage: React.FC = () => {
     // Use a simple window.confirm for safety
     if (window.confirm(`Are you sure you want to delete this ${assetType}? This action cannot be undone.`)) {
       try {
-        // Use /api/assets/{asset_id}
+        // Useset_id}
         await api.delete(`/assets/${assetId}`);
         fetchData(); // Refresh data
       } catch (err: any) {
@@ -256,8 +256,8 @@ export const InventoryPage: React.FC = () => {
     setHistoryOpen(true);
     setError(''); // Clear main page error
     try {
-      // Use /api/assets/{asset_id}/history
-      const response = await api.get<AssetHistory[]>(`/assets/${asset.id}/history`);
+      // Usesets/{asset_id}/history
+      const response = await api.get<AssetHistory[]>(`/api/assets/${asset.id}/history`);
       setHistoryData(response.data);
     } catch (err: any) {
       console.error("Failed to fetch history:", err);

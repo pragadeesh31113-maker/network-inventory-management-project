@@ -50,7 +50,7 @@ const OnboardingForm: React.FC<OnboardingFormProps> = ({ customer, fdhs, onSucce
     setSuggestions([]);
     setError('');
     try {
-      const res = await api.get(`/onboard/suggest_port/${customer.id}`);
+      const res = await api.get(`/api/onboard/suggest_port/${customer.id}`);
       setSuggestions(res.data);
       if (res.data.length === 1) {
         const sug = res.data[0];
@@ -84,7 +84,7 @@ const OnboardingForm: React.FC<OnboardingFormProps> = ({ customer, fdhs, onSucce
         splitter_id: Number(selectedSplitterId),
         splitter_port: Number(selectedPort),
       };
-      await api.post('/onboard/', payload);
+      await api.post('/api/onboard/', payload);
       onSuccess(); // Callback to refresh parent data
     } catch (err: any) {
       // Safe Error Handling
@@ -224,9 +224,9 @@ export const PlannerDashboard: React.FC = () => {
     setError('');
     try {
       // Fetch pending customers (ensure pincode is included)
-      const customerRes = await api.get('/onboard/pending');
+      const customerRes = await api.get('/api/onboard/pending');
       // Fetch hierarchy (ensure FDHs have location fields)
-      const fdhRes = await api.get('/hierarchy/fdh');
+      const fdhRes = await api.get('/api/hierarchy/fdh');
 
       // Basic validation
       if (!Array.isArray(customerRes.data)) throw new Error("Invalid customer data received");

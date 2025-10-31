@@ -1,19 +1,17 @@
 # backend/app/main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session # Keep Session import if needed elsewhere, but not strictly for startup
+from sqlalchemy.orm import Session
 
 # --- Import SessionLocal for manual session creation ---
-from .database import Base, engine, SessionLocal # Assuming SessionLocal is defined in database.py
+from .database import Base, engine, SessionLocal
 from . import models # Import models to ensure tables are known to Base
 
 # --- Import Routers ---
 # Ensure all routers you intend to use are imported
-from .routers import auth, assets, hierarchy, onboarding, tasks, customers, lifecycle, dashboard, overview # Make sure 'overview' is imported if you created it
+from .routers import auth, assets, hierarchy, onboarding, tasks, customers, lifecycle, dashboard, overview, topology
 
 # --- Create Database Tables ---
-# It's often better to create tables outside the startup event,
-# ensuring they exist before the app tries to use them.
 try:
     models.Base.metadata.create_all(bind=engine)
     print("Database tables created/verified.")
@@ -37,7 +35,6 @@ app.add_middleware(
 @app.on_event("startup")
 def on_startup():
     print("Application startup: attempting to seed database...")
-    # Manually create a database session for seeding
     db: Session = SessionLocal()
     try:
         from .seed import seed_all # Import the seeding function
@@ -55,15 +52,17 @@ def on_startup():
 
 # --- API Routers ---
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
-app.include_router(assets.router, prefix="/api/assets", tags=["Asset Management"]) # Renamed tag
+app.include_router(assets.router, prefix="/api/assets", tags=["Asset Management"])
 app.include_router(hierarchy.router, prefix="/api/hierarchy", tags=["Network Hierarchy"])
 app.include_router(onboarding.router, prefix="/api/onboard", tags=["Customer Onboarding"])
 app.include_router(tasks.router, prefix="/api/tasks", tags=["Deployment Tasks"])
 app.include_router(customers.router, prefix="/api/customers", tags=["Customer Management"])
-app.include_router(lifecycle.router, prefix="/api/lifecycle", tags=["Customer Lifecycle"]) # Renamed tag
+app.include_router(lifecycle.router, prefix="/api/lifecycle", tags=["Customer Lifecycle"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Admin Dashboard"])
-# Make sure to include the overview router if you created it
 app.include_router(overview.router, prefix="/api/overview", tags=["Network Overview"])
+
+# --- THIS IS THE CRITICAL FIX for the 404 error ---
+app.include_router(topology.router, prefix="/api/topology", tags=["Network Topology"])
 
 
 # --- Root Endpoint ---

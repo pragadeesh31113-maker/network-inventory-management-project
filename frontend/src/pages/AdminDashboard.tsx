@@ -32,7 +32,7 @@ export const AdminDashboard: React.FC = () => {
     const fetchSummary = async () => {
       try {
         setLoading(true);
-        const res = await api.get('/dashboard/summary');
+        const res = await api.get('/api/dashboard/summary');
         setKpis(res.data.kpis);
         setAssetData(res.data.asset_summary);
       } catch (err) {

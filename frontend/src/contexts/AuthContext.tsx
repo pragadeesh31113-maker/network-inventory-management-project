@@ -35,7 +35,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // Token exists, let's validate it and get user data
         localStorage.setItem('access_token', token); // Make sure it's in storage
         try {
-          const response = await api.get('/auth/me'); // Get user data
+          const response = await api.get('/api/auth/me'); // Get user data
           setUser(response.data);
         } catch (error) {
           console.error('Failed to fetch user, bad token.', error);

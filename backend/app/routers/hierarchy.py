@@ -111,3 +111,83 @@ def update_fdh_location(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update FDH and cascade changes.",
         )
+# --- ADD THIS NEW TEMPORARY ENDPOINT AT THE BOTTOM ---
+@router.get("/link_splitter_to_fdh/{splitter_id}/{fdh_id}")
+def link_splitter_to_fdh(
+    splitter_id: int,
+    fdh_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(deps.is_admin) # Only admin can do this
+):
+    """
+    TEMPORARY ADMIN TOOL: Links a Splitter to an FDH.
+    """
+    # Find the splitter (using the Splitter model)
+    splitter = db.query(models.Splitter).filter(models.Splitter.id == splitter_id).first()
+    if not splitter:
+        raise HTTPException(status_code=404, detail=f"Splitter with id {splitter_id} not found")
+    
+    # Find the FDH (using the FDH model)
+    fdh = db.query(models.FDH).filter(models.FDH.id == fdh_id).first()
+    if not fdh:
+        raise HTTPException(status_code=404, detail=f"FDH with id {fdh_id} not found")
+        
+    # Perform the link
+    splitter.fdh_id = fdh.id
+    db.add(splitter)
+    db.commit()
+    
+    return {
+        "message": "Link successful!",
+        "splitter_name": splitter.name,
+        "linked_to_fdh": fdh.name
+    }
+# --- ADD THIS NEW TOOL TO FIND THE IDs ---
+@router.get("/list_linkable_items/", response_model=dict)
+def list_linkable_items(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(deps.is_admin)
+):
+    """
+    ADMIN TOOL: Lists all FDHs and Splitters from the correct tables.
+    """
+    fdhs = db.query(models.FDH).all()
+    splitters = db.query(models.Splitter).all()
+    
+    return {
+        "fdhs": [
+            {"id": f.id, "name": f.name} for f in fdhs
+        ],
+        "splitters": [
+            {"id": s.id, "name": s.name, "currently_linked_fdh_id": s.fdh_id} for s in splitters
+        ]
+    }
+
+# --- ADD THIS LINKING TOOL (or make sure it's still there) ---
+@router.get("/link_splitter_to_fdh/{splitter_id}/{fdh_id}")
+def link_splitter_to_fdh(
+    splitter_id: int,
+    fdh_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(deps.is_admin)
+):
+    """
+    ADMIN TOOL: Links a Splitter to an FDH using their IDs.
+    """
+    splitter = db.query(models.Splitter).filter(models.Splitter.id == splitter_id).first()
+    if not splitter:
+        raise HTTPException(status_code=404, detail=f"Splitter with id {splitter_id} not found in 'splitters' table")
+    
+    fdh = db.query(models.FDH).filter(models.FDH.id == fdh_id).first()
+    if not fdh:
+        raise HTTPException(status_code=404, detail=f"FDH with id {fdh_id} not found in 'fdhs' table")
+        
+    splitter.fdh_id = fdh.id
+    db.add(splitter)
+    db.commit()
+    
+    return {
+        "message": "Link successful!",
+        "splitter_name": splitter.name,
+        "linked_to_fdh": fdh.name
+    }

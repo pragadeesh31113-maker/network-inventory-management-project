@@ -2,7 +2,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'http://localhost:8000/api', // Your FastAPI backend
+  baseURL: 'http://localhost:8000', // Your FastAPI backend
 });
 
 // This is an "interceptor"

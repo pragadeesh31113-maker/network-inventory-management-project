@@ -27,7 +27,7 @@ export const TechnicianDashboard: React.FC = () => {
   const fetchTasks = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/tasks/my-tasks');
+      const res = await api.get('/api/tasks/my-tasks');
       setTasks(res.data);
     } catch (err) {
       setError('Failed to load tasks.');
@@ -44,7 +44,7 @@ export const TechnicianDashboard: React.FC = () => {
   const handleUpdateStatus = async (taskId: number, newStatus: string) => {
     try {
       setTasks(tasks.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
-      await api.put(`/tasks/${taskId}/status`, { status: newStatus });
+      await api.put(`/api/tasks/${taskId}/status`, { status: newStatus });
       fetchTasks();
     } catch (err) {
       setError('Failed to update task status.');

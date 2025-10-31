@@ -24,7 +24,7 @@ export const SignUpPage: React.FC = () => {
       return;
     }
     try {
-      await api.post('/auth/signup', {
+      await api.post('/api/auth/signup', {
         email,
         username,
         password,
