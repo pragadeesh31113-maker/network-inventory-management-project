@@ -26,6 +26,7 @@ class AssetStatus(str, enum.Enum):
     FAULTY = "FAULTY"
     IN_REPAIR = "IN_REPAIR"
     RETIRED = "RETIRED"
+    IN_USE = "IN_USE"  # <-- THIS IS THE FIX
 
 # --- Models ---
 
@@ -81,8 +82,6 @@ class Asset(Base):
     assigned_to_customer = relationship("CustomerProfile", back_populates="assigned_assets")
     # Relationship to AssetHistory
     history = relationship("AssetHistory", back_populates="asset", cascade="all, delete-orphan")
-
-# backend/app/models.py
 
 class AssetHistory(Base):
     __tablename__ = "asset_history"

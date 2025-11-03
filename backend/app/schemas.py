@@ -183,3 +183,21 @@ class MyProfile(BaseModel):
     
     class Config:
         from_attributes = True
+
+class CustomerProfileForAsset(BaseModel):
+    id: int
+    user: UserBase # This will nest the user's name
+
+    class Config:
+        from_attributes = True
+
+class AssetDetail(BaseModel):
+    id: int
+    serial_number: str
+    model: Optional[str] = None
+    asset_type: AssetType # <-- REMOVE 'models.'
+    status: AssetStatus   # <-- REMOVE 'models.'
+    location: Optional[str] = None
+
+    # This is the new field that links to the customer
+    assigned_to_customer: Optional[CustomerProfileForAsset] = None

@@ -5,7 +5,8 @@ import {
   Box, Typography, Button, CircularProgress, Alert, Chip, Dialog, DialogTitle,
   DialogContent, DialogActions, TextField, MenuItem, FormControl, InputLabel, Select,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, IconButton,
-  Grid, List, ListItem, ListItemText, SelectChangeEvent, Stack, AlertTitle
+  Grid, List, ListItem, ListItemText, SelectChangeEvent, Stack, AlertTitle, Tooltip,
+  InputAdornment
 } from '@mui/material';
 import { AssetPieChart } from '../components/charts/AssetPieChart';
 import { StatCard } from '../components/StatCard';
@@ -19,14 +20,22 @@ import DevicesIcon from '@mui/icons-material/Devices';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn';
-import HighlightOffIcon from '@mui/icons-material/HighlightOff';
-import LocationOnIcon from '@mui/icons-material/LocationOn';
-import ClearAllIcon from '@mui/icons-material/ClearAll';
+import SearchIcon from '@mui/icons-material/Search';
 
 // --- Types ---
-type AssetStatus = "AVAILABLE" | "ASSIGNED" | "FAULTY" | "IN_REPAIR" | "RETIRED";
+type AssetStatus = "AVAILABLE" | "ASSIGNED" | "FAULTY" | "IN_REPAIR" | "RETIRED" | "IN_USE";
 type AssetType = "ONT" | "ROUTER" | "SPLITTER" | "FDH";
 
+// --- Types from API (AssetDetail) ---
+interface UserInfo {
+  username: string;
+  email: string;
+  full_name: string;
+}
+interface AssignedCustomer {
+  id: number;
+  user: UserInfo;
+}
 interface Asset {
   id: number;
   serial_number: string;
@@ -34,11 +43,9 @@ interface Asset {
   asset_type: AssetType;
   status: AssetStatus;
   location: string | null;
-  assigned_to_customer_id: number | null;
-  pincode?: string | null;
-  district?: string | null;
-  region?: string | null;
+  assigned_to_customer: AssignedCustomer | null;
 }
+// --- END Types ---
 
 interface AssetHistory {
   id: number;
@@ -46,10 +53,9 @@ interface AssetHistory {
   action: string;
   details: string | null;
   changed_by_user_id: number | null;
-  // user: { username: string } | null; // Uncomment if your API populates this
 }
 
-interface SummaryData {
+interface CalculatedSummary {
   kpis: {
     total_assets: number;
     total_assigned: number;
@@ -60,15 +66,6 @@ interface SummaryData {
   by_type: { name: string, value: number }[];
 }
 
-// This MUST match the FDH schema returned by youpoint
-interface FDHHierarchyDetails {
-  id: number; // This is the Asset ID
-  name: string; // This is the FDH (asset) serial_number or model
-  location: string | null;
-  pincode: string | null;
-  district: string | null;
-  region: string | null;
-}
 
 const emptyAsset: Partial<Asset> = {
   serial_number: '',
@@ -76,28 +73,94 @@ const emptyAsset: Partial<Asset> = {
   asset_type: 'ONT',
   status: 'AVAILABLE',
   location: 'Central Warehouse',
-  district: '',
-  region: '',
-  pincode: ''
 };
 
 // Colors for the Legend
 const LEGEND_COLORS: { [key: string]: string } = {
-  AVAILABLE: '#00C49F', ASSIGNED: '#0088FE', FAULTY: '#FF8042',
-  IN_REPAIR: '#FFBB28', RETIRED: '#B0B0B0',
-  ONT: '#8884D8', ROUTER: '#82CA9D', SPLITTER: '#FF7F0E', FDH: '#1F77B4',
+  AVAILABLE: '#00C49F', 
+  ASSIGNED: '#0088FE', 
+  FAULTY: '#FFBB28',
+  IN_REPAIR: '#FF8042', 
+  RETIRED: '#B0B0B0',
+  IN_USE: '#8884D8', // Purple for "IN_USE"
+  ONT: '#8884D8', 
+  ROUTER: '#82CA9D', 
+  SPLITTER: '#FF7F0E', 
+  FDH: '#1F77B4',
 };
+
+// --- Custom Legend Component ---
+interface LegendProps {
+  data: { name: string, value: number }[];
+  colors: { [key: string]: string };
+  activeFilter: string | null;
+  onClick: (name: string) => void;
+}
+const CustomLegend: React.FC<LegendProps> = ({ data, colors, activeFilter, onClick }) => (
+  <List dense sx={{ width: '100%', maxWidth: 200, ml: 3 }}>
+    {data.map((entry) => (
+      <ListItem
+        key={entry.name}
+        button
+        onClick={() => onClick(entry.name)}
+        sx={{
+          opacity: activeFilter ? (activeFilter === entry.name ? 1 : 0.5) : 1,
+          border: activeFilter === entry.name ? `2px solid ${colors[entry.name]}` : 'none',
+          borderRadius: '4px',
+          mb: 0.5,
+        }}
+      >
+        <Box sx={{ width: 16, height: 16, bgcolor: colors[entry.name] || '#ccc', mr: 1.5, borderRadius: '3px' }} />
+        <ListItemText primary={`${entry.name} (${entry.value})`} primaryTypographyProps={{ variant: 'body2', noWrap: true }} />
+      </ListItem>
+    ))}
+  </List>
+);
+
+// --- Helper function to calculate summary from the asset list ---
+const calculateSummary = (assets: Asset[]): CalculatedSummary => {
+  const summary: CalculatedSummary = {
+    kpis: {
+      total_assets: assets.length,
+      total_assigned: 0,
+      total_available: 0,
+      total_faulty: 0,
+    },
+    by_status: [],
+    by_type: [],
+  };
+
+  const statusCount: { [key: string]: number } = {};
+  const typeCount: { [key in AssetType]?: number } = {};
+
+  for (const asset of assets) {
+    // Count for KPIs
+    if (asset.status === 'ASSIGNED') summary.kpis.total_assigned++;
+    if (asset.status === 'AVAILABLE') summary.kpis.total_available++;
+    if (asset.status === 'FAULTY' || asset.status === 'IN_REPAIR') summary.kpis.total_faulty++;
+
+    // Count for charts
+    statusCount[asset.status] = (statusCount[asset.status] || 0) + 1;
+    typeCount[asset.asset_type] = (typeCount[asset.asset_type] || 0) + 1;
+  }
+
+  summary.by_status = Object.entries(statusCount).map(([name, value]) => ({ name, value }));
+  summary.by_type = Object.entries(typeCount).map(([name, value]) => ({ name, value }));
+
+  return summary;
+};
+
 
 // --- Main Component ---
 export const InventoryPage: React.FC = () => {
   // --- State Variables ---
   const [assets, setAssets] = useState<Asset[]>([]);
-  const [summary, setSummary] = useState<SummaryData | null>(null);
+  const [summary, setSummary] = useState<CalculatedSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   
   // Dialog States
-  const [open, setOpen] = useState(false); // Standard Dialog
+  const [open, setOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [currentAsset, setCurrentAsset] = useState<Partial<Asset>>(emptyAsset);
   
@@ -111,36 +174,29 @@ export const InventoryPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<AssetStatus | null>(null);
   const [typeFilter, setTypeFilter] = useState<AssetType | null>(null);
   const [modelFilter, setModelFilter] = useState<string | null>(null);
-  
-  // FDH Dialog States
-  const [fdhLocationData, setFdhLocationData] = useState<FDHHierarchyDetails>({ id: 0, name: '', location: '', pincode: '', district: '', region: '' });
-  const [fdhLocationDialogOpen, setFdhLocationDialogOpen] = useState(false);
-  const [fdhLoading, setFdhLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // --- Data Fetching ---
   const fetchData = useCallback(async () => {
     setError('');
     setLoading(true); 
     try {
-      // Use the correct API routes we found
-      const [summaryResponse, assetsResponse] = await Promise.all([
-        api.get<SummaryData>('/api/assets/summary'),
-        api.get<Asset[]>('/api/assets/') 
-      ]);
-
-      setSummary(summaryResponse.data);
-      setAssets(assetsResponse.data);
+      const assetsResponse = await api.get<Asset[]>('/api/assets/');
+      const allAssets = assetsResponse.data;
+      const calculatedSummary = calculateSummary(allAssets);
+      
+      setAssets(allAssets);
+      setSummary(calculatedSummary);
 
     } catch (err: any) {
       console.error("Failed to fetch inventory data:", err);
-      const message = err.response?.data?.message || 'Failed to load inventory. Please try again.';
+      const message = err.response?.data?.detail || 'Failed to load inventory. Please try again.';
       setError(message);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Run fetchData once on component mount
   useEffect(() => {
     fetchData();
   }, [fetchData]);
@@ -149,7 +205,7 @@ export const InventoryPage: React.FC = () => {
   const uniqueModels = useMemo(() => {
     const models = new Set(assets
       .map(asset => asset.model)
-      .filter((model): model is string => !!model) // Filter out null/undefined
+      .filter((model): model is string => !!model)
     );
     return Array.from(models).sort();
   }, [assets]);
@@ -164,31 +220,13 @@ export const InventoryPage: React.FC = () => {
 
   const handleOpenEdit = async (asset: Asset) => {
     setError('');
-    if (asset.asset_type === 'FDH') {
-      // Open the specific FDH location dialog
-      setFdhLoading(true);
-      setFdhLocationDialogOpen(true);
-      try {
-        // Use tharchy/ route we found
-        const response = await api.get<FDHHierarchyDetails>(`/api/hierarchy/${asset.id}`);
-        setFdhLocationData(response.data);
-      } catch (err: any) {
-        setError('Failed to load FDH location data.');
-        setFdhLocationDialogOpen(false); // Close dialog on error
-      } finally {
-        setFdhLoading(false);
-      }
-    } else {
-      // Open the standard asset dialog
-      setCurrentAsset(asset);
-      setIsEditMode(true);
-      setOpen(true);
-    }
+    setCurrentAsset(asset);
+    setIsEditMode(true);
+    setOpen(true);
   };
 
   const handleClose = () => {
     setOpen(false);
-    setFdhLocationDialogOpen(false);
     setError('');
   };
 
@@ -197,55 +235,36 @@ export const InventoryPage: React.FC = () => {
     setCurrentAsset(prev => ({ ...prev, [name]: value }));
   };
   
-  const handleFdhLocationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFdhLocationData(prev => ({ ...prev, [name]: value }));
-  };
-
   const handleSave = async () => {
     setError('');
     try {
       if (isEditMode) {
-        // Update existing asset -ssets/{asset_id}
-        await api.put(`/api/assets/${currentAsset.id}`, currentAsset);
+        const updatePayload = {
+          model: currentAsset.model,
+          status: currentAsset.status,
+          location: currentAsset.location
+        };
+        await api.put(`/api/assets/${currentAsset.id}`, updatePayload);
       } else {
-        // Create new asset ssets/
         await api.post('/api/assets/', currentAsset);
       }
-      handleClose(); // Close dialog
-      fetchData();   // Refresh data in the table
+      handleClose(); 
+      fetchData();
     } catch (err: any) {
       console.error("Failed to save asset:", err);
-      setError(err.response?.data?.message || 'Failed to save asset.');
+      setError(err.response?.data?.detail || 'Failed to save asset.');
     }
   };
   
-  const handleSaveFdhLocation = async () => {
-    setError('');
-    setFdhLoading(true);
-    try {
-      // Use theroute
-      await api.put(`/api/hierarchy/${fdhLocationData.id}`, fdhLocationData);
-      handleClose();
-      fetchData(); // Refresh all data
-    } catch (err: any) {
-      console.error("Failed to save FDH location:", err);
-      setError(err.response?.data?.message || 'Failed to save FDH location.');
-    } finally {
-      setFdhLoading(false);
-    }
-  };
-
   const handleDelete = async (assetId: number, assetType: AssetType) => {
-    // Use a simple window.confirm for safety
     if (window.confirm(`Are you sure you want to delete this ${assetType}? This action cannot be undone.`)) {
       try {
-        // Useset_id}
-        await api.delete(`/assets/${assetId}`);
-        fetchData(); // Refresh data
-      } catch (err: any) {
+        await api.delete(`/api/assets/${assetId}`);
+        fetchData();
+      } catch (err: any)
+      {
         console.error("Failed to delete asset:", err);
-        setError(err.response?.data?.message || 'Failed to delete asset.');
+        setError(err.response?.data?.detail || 'Failed to delete asset.');
       }
     }
   };
@@ -254,23 +273,26 @@ export const InventoryPage: React.FC = () => {
     setHistoryAssetSN(asset.serial_number);
     setHistoryLoading(true);
     setHistoryOpen(true);
-    setError(''); // Clear main page error
+    setError(''); 
     try {
-      // Usesets/{asset_id}/history
       const response = await api.get<AssetHistory[]>(`/api/assets/${asset.id}/history`);
       setHistoryData(response.data);
     } catch (err: any) {
       console.error("Failed to fetch history:", err);
-      setHistoryData([]); // Clear old data
+      setHistoryData([]);
     } finally {
       setHistoryLoading(false);
     }
   };
 
   const getStatusChip = (status: AssetStatus): React.ReactElement | null => {
-    const colorMap: Record<AssetStatus, "success" | "info" | "error" | "warning" | "default"> = {
-      AVAILABLE: 'success', ASSIGNED: 'info', FAULTY: 'error',
-      IN_REPAIR: 'warning', RETIRED: 'default',
+    const colorMap: Record<AssetStatus, "success" | "info" | "error" | "warning" | "default" | "secondary"> = {
+      AVAILABLE: 'success', 
+      ASSIGNED: 'info', 
+      FAULTY: 'error',
+      IN_REPAIR: 'warning', 
+      RETIRED: 'default',
+      IN_USE: 'secondary'
     };
     if (status && colorMap[status]) {
       return <Chip label={status} color={colorMap[status]} variant="outlined" size="small" />;
@@ -291,21 +313,45 @@ export const InventoryPage: React.FC = () => {
     setModelFilter(e.target.value ? e.target.value : null);
   };
   
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(e.target.value.toLowerCase());
+  };
+  
   const clearAllFilters = () => {
     setStatusFilter(null);
     setTypeFilter(null);
     setModelFilter(null);
+    setSearchQuery('');
   }
 
-  // --- Memoized Filtered Data ---
+  // --- Memoized Filtered Data (NOW WITH SEARCH) ---
   const filteredAssets = useMemo(() => {
     return assets.filter(asset => {
+      // 1. Pie Chart/Dropdown Filters
       if (statusFilter && asset.status !== statusFilter) return false;
       if (typeFilter && asset.asset_type !== typeFilter) return false;
       if (modelFilter && asset.model !== modelFilter) return false;
+      
+      // 2. Text Search Filter
+      if (searchQuery) {
+        const customerName = asset.assigned_to_customer?.user?.full_name?.toLowerCase() || '';
+        const location = asset.location?.toLowerCase() || '';
+        const serial = asset.serial_number.toLowerCase();
+        const model = asset.model?.toLowerCase() || '';
+        
+        if (
+          !serial.includes(searchQuery) &&
+          !model.includes(searchQuery) &&
+          !location.includes(searchQuery) &&
+          !customerName.includes(searchQuery)
+        ) {
+          return false;
+        }
+      }
+      
       return true;
     });
-  }, [assets, statusFilter, typeFilter, modelFilter]);
+  }, [assets, statusFilter, typeFilter, modelFilter, searchQuery]);
 
   // --- Render Logic ---
   if (loading && assets.length === 0) {
@@ -330,8 +376,22 @@ export const InventoryPage: React.FC = () => {
       {/* Header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h4" component="h1">Asset Management</Typography>
-        <Box sx={{ display: 'flex', gap: 2 }}>
-          <FormControl sx={{ minWidth: 240 }} size="small">
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          <TextField
+            label="Search Inventory"
+            variant="outlined"
+            size="small"
+            value={searchQuery}
+            onChange={handleSearchChange}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon color="action" />
+                </InputAdornment>
+              ),
+            }}
+          />
+          <FormControl sx={{ minWidth: 200 }} size="small">
             <InputLabel>Filter by Model</InputLabel>
             <Select
               value={modelFilter || ''}
@@ -393,10 +453,11 @@ export const InventoryPage: React.FC = () => {
       )}
 
       {/* Active Filters Display */}
-      {(statusFilter || typeFilter || modelFilter) && (
+      {(statusFilter || typeFilter || modelFilter || searchQuery) && (
         <Alert severity="info" sx={{ my: 2 }} onClose={clearAllFilters}>
           <Typography variant="body2" sx={{ fontWeight: 'bold' }}>Active Filters (click X to clear):</Typography>
-          <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+          <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap', gap: 1 }}>
+            {searchQuery && <Chip label={`Search: "${searchQuery}"`} onDelete={() => setSearchQuery('')} />}
             {statusFilter && <Chip label={`Status: ${statusFilter}`} onDelete={() => setStatusFilter(null)} />}
             {typeFilter && <Chip label={`Type: ${typeFilter}`} onDelete={() => setTypeFilter(null)} />}
             {modelFilter && <Chip label={`Model: ${modelFilter}`} onDelete={() => setModelFilter(null)} />}
@@ -405,7 +466,7 @@ export const InventoryPage: React.FC = () => {
       )}
       
       {/* Global Error Display */}
-      {error && !open && !fdhLocationDialogOpen && (
+      {error && !open && (
         <Alert severity="error" sx={{ my: 2 }} onClose={() => setError('')}>
           {error}
         </Alert>
@@ -421,40 +482,51 @@ export const InventoryPage: React.FC = () => {
                 <TableCell>Asset Type</TableCell>
                 <TableCell>Model</TableCell>
                 <TableCell>Status</TableCell>
-                <TableCell>Location</TableCell>
-                <TableCell>Assigned Customer</TableCell>
+                <TableCell>Location / Assigned To</TableCell>
                 <TableCell align="right">Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {filteredAssets.map((asset) => (
                 <TableRow hover key={asset.id}>
-                  <TableCell sx={{ fontWeight: 600 }}>{asset.serial_number}</TableCell>
+                  <TableCell sx={{ fontWeight: 600, fontFamily: 'monospace' }}>{asset.serial_number}</TableCell>
                   <TableCell>{asset.asset_type}</TableCell>
                   <TableCell>{asset.model || 'N/A'}</TableCell>
                   <TableCell>{getStatusChip(asset.status)}</TableCell>
-                  <TableCell>{asset.location || 'N/A'}</TableCell>
-                  <TableCell>{asset.assigned_to_customer_id || '---'}</TableCell>
+                  <TableCell>
+                    {asset.status === 'ASSIGNED' && asset.assigned_to_customer ? (
+                      <Typography variant="body2" color="info.light" sx={{ fontWeight: 500 }}>
+                        {asset.assigned_to_customer.user.full_name}
+                      </Typography>
+                    ) : (
+                      asset.location || 'N/A'
+                    )}
+                  </TableCell>
                   <TableCell align="right">
                     <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
-                      <IconButton title="Edit" size="small" onClick={() => handleOpenEdit(asset)}>
-                        <EditIcon />
-                      </IconButton>
-                      <IconButton title="History" size="small" onClick={() => handleOpenHistory(asset)}>
-                        <HistoryIcon />
-                      </IconButton>
-                      <IconButton title="Delete" size="small" onClick={() => handleDelete(asset.id, asset.asset_type)}>
-                        <DeleteIcon />
-                      </IconButton>
+                      <Tooltip title="Edit">
+                        <IconButton size="small" onClick={() => handleOpenEdit(asset)}>
+                          <EditIcon />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="History">
+                        <IconButton size="small" onClick={() => handleOpenHistory(asset)}>
+                          <HistoryIcon />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Delete">
+                        <IconButton size="small" onClick={() => handleDelete(asset.id, asset.asset_type)}>
+                          <DeleteIcon />
+                        </IconButton>
+                      </Tooltip>
                     </Box>
                   </TableCell>
                 </TableRow>
               ))}
-              {/* No results message */}
               {filteredAssets.length === 0 && !loading && (
                 <TableRow>
                   <TableCell colSpan={7} align="center">
-                    No assets found{ (statusFilter || typeFilter || modelFilter) ? ' with the current filters.' : '.'}
+                    No assets found{ (statusFilter || typeFilter || modelFilter || searchQuery) ? ' with the current filters.' : '.'}
                   </TableCell>
                 </TableRow>
               )}
@@ -498,10 +570,13 @@ export const InventoryPage: React.FC = () => {
             >
               <MenuItem value="ONT">ONT</MenuItem>
               <MenuItem value="ROUTER">Router</MenuItem>
-              <MenuItem value="SPLITTER">Splitter</MenuItem>
               <MenuItem value="FDH">FDH</MenuItem>
+              <MenuItem value="SPLITTER">Splitter</MenuItem>
             </Select>
           </FormControl>
+          
+          {/* --- THIS IS THE FIX for point #2 --- */}
+          {/* The dropdown is no longer fully disabled */}
           <FormControl margin="dense" fullWidth>
             <InputLabel>Status *</InputLabel>
             <Select
@@ -510,13 +585,29 @@ export const InventoryPage: React.FC = () => {
               value={currentAsset.status || 'AVAILABLE'}
               onChange={handleChange}
             >
+              {/* These statuses can always be manually set */}
               <MenuItem value="AVAILABLE">Available</MenuItem>
-              <MenuItem value="ASSIGNED">Assigned</MenuItem>
               <MenuItem value="FAULTY">Faulty</MenuItem>
               <MenuItem value="IN_REPAIR">In Repair</MenuItem>
               <MenuItem value="RETIRED">Retired</MenuItem>
+              
+              {/* These are automatic. They are only selectable if they are already the current status */}
+              <MenuItem 
+                value="ASSIGNED" 
+                disabled={currentAsset.status !== 'ASSIGNED'}
+              >
+                Assigned
+              </MenuItem>
+              <MenuItem 
+                value="IN_USE" 
+                disabled={currentAsset.status !== 'IN_USE'}
+              >
+                In Use
+              </MenuItem>
             </Select>
           </FormControl>
+          {/* --- END FIX --- */}
+          
           <TextField
             margin="dense"
             name="location"
@@ -536,92 +627,33 @@ export const InventoryPage: React.FC = () => {
         </DialogActions>
       </Dialog>
 
-      {/* FDH Location Edit Dialog */}
-      <Dialog open={fdhLocationDialogOpen} onClose={handleClose} maxWidth="sm" fullWidth>
-        <DialogTitle>Update FDH Location (Cascades)</DialogTitle>
-        <DialogContent>
-          {fdhLoading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress /></Box>
-          ) : (
-            <>
-              <Alert severity="warning" sx={{ mb: 2 }}>Changing these details may cascade to all child assets (Splitters, ONTs) at this location.</Alert>
-              <TextField
-                autoFocus
-                margin="dense"
-                name="location"
-                label="Location Name"
-                type="text"
-                fullWidth
-                value={fdhLocationData.location || ''}
-                onChange={handleFdhLocationChange}
-              />
-              <TextField
-                margin="dense"
-                name="pincode"
-                label="Pincode"
-                type="text"
-                fullWidth
-                value={fdhLocationData.pincode || ''}
-                onChange={handleFdhLocationChange}
-              />
-              <TextField
-                margin="dense"
-                name="district"
-                label="District"
-                type="text"
-                fullWidth
-                value={fdhLocationData.district || ''}
-                onChange={handleFdhLocationChange}
-              />
-              <TextField
-                margin="dense"
-                name="region"
-                label="Region"
-                type="text"
-                fullWidth
-                value={fdhLocationData.region || ''}
-                onChange={handleFdhLocationChange}
-              />
-              {error && fdhLocationDialogOpen && <Alert severity="error" sx={{ mt: 1 }}>{error}</Alert>}
-            </>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleClose}>Cancel</Button>
-          <Button onClick={handleSaveFdhLocation} variant="contained" disabled={fdhLoading}>
-            {fdhLoading ? <CircularProgress size={24} /> : 'Save Location'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
       {/* History Dialog */}
       <Dialog open={historyOpen} onClose={() => setHistoryOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>Asset History: {historyAssetSN}</DialogTitle>
+        <DialogTitle>Asset History for: {historyAssetSN}</DialogTitle>
         <DialogContent>
           {historyLoading ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress /></Box>
-          ) : historyData.length > 0 ? (
+          ) : (
             <List dense>
-              {historyData.map((entry) => (
+              {historyData.length === 0 && (
+                <ListItem><ListItemText primary="No history found for this asset." /></ListItem>
+              )}
+              {historyData.map(entry => (
                 <ListItem key={entry.id} divider>
                   <ListItemText
-                    primary={entry.action}
-                    secondary={
-                      <>
-                        <Typography component="span" variant="body2" color="text.primary">
+                    primary={
+                      <Box component="span" sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <Typography variant="body2" sx={{ fontWeight: 'bold' }}>{entry.action}</Typography>
+                        <Typography variant="caption" color="textSecondary">
                           {new Date(entry.timestamp).toLocaleString()}
                         </Typography>
-                        {entry.details && ` - ${entry.details}`}
-                        {/* You would get username from a populated user object */}
-                        {entry.changed_by_user_id && ` (User ID: ${entry.changed_by_user_id})`}
-                      </>
+                      </Box>
                     }
+                    secondary={entry.details || 'No details recorded.'}
                   />
                 </ListItem>
               ))}
             </List>
-          ) : (
-            <Typography>No history found for this asset.</Typography>
           )}
         </DialogContent>
         <DialogActions>
@@ -632,32 +664,4 @@ export const InventoryPage: React.FC = () => {
   );
 };
 
-
-// --- Custom Legend Component ---
-interface CustomLegendProps {
-  data: { name: string, value: number }[];
-  colors: { [key: string]: string };
-  activeFilter: string | null;
-  onClick: (name: string) => void;
-}
-
-const CustomLegend: React.FC<CustomLegendProps> = ({ data, colors, activeFilter, onClick }) => (
-  <Stack direction="column" spacing={0.5} sx={{ ml: 4, my: 'auto', flexShrink: 0 }}>
-    {data.map((entry) => (
-      <Box
-        key={`legend-${entry.name}`}
-        sx={{
-          display: 'flex', alignItems: 'center', cursor: 'pointer',
-          opacity: activeFilter && activeFilter !== entry.name ? 0.6 : 1,
-          fontWeight: activeFilter === entry.name ? 'bold' : 'normal',
-          '&:hover': { opacity: 0.8 },
-          transition: 'opacity 0.2s',
-        }}
-        onClick={() => onClick(entry.name)}
-      >
-        <Box sx={{ width: 16, height: 16, borderRadius: '4px', bgcolor: colors[entry.name] || '#A0A0A0', mr: 1 }} />
-        <Typography variant="body2">{entry.name} ({entry.value})</Typography>
-      </Box>
-    ))}
-  </Stack>
-);
+export default InventoryPage;
