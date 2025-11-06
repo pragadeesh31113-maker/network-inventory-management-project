@@ -410,15 +410,23 @@ export const InventoryPage: React.FC = () => {
         </Box>
       </Box>
 
-      {/* KPI Cards */}
-      {summary && (
-        <Grid container spacing={3} sx={{ mb: 3 }}>
-          <StatCard title="Total Assets" value={summary.kpis.total_assets} icon={<DevicesIcon />} color="primary.main" />
-          <StatCard title="Assigned" value={summary.kpis.total_assigned} icon={<AssignmentTurnedInIcon />} color="info.main" />
-          <StatCard title="Available" value={summary.kpis.total_available} icon={<CheckCircleIcon />} color="success.main" />
-          <StatCard title="Faulty / In Repair" value={summary.kpis.total_faulty} icon={<ErrorIcon />} color="error.main" />
-        </Grid>
-      )}
+{/* KPI Cards */}
+{summary && (
+  <Grid container spacing={3} sx={{ mb: 3 }}>
+    <Grid item xs={12} sm={6} md={3}>
+      <StatCard title="Total Assets" value={summary.kpis.total_assets} icon={<DevicesIcon />} color="primary.main" />
+    </Grid>
+    <Grid item xs={12} sm={6} md={3}>
+      <StatCard title="Assigned" value={summary.kpis.total_assigned} icon={<AssignmentTurnedInIcon />} color="info.main" />
+    </Grid>
+    <Grid item xs={12} sm={6} md={3}>
+      <StatCard title="Available" value={summary.kpis.total_available} icon={<CheckCircleIcon />} color="success.main" />
+    </Grid>
+    <Grid item xs={12} sm={6} md={3}>
+      <StatCard title="Faulty / In Repair" value={summary.kpis.total_faulty} icon={<ErrorIcon />} color="error.main" />
+    </Grid>
+  </Grid>
+)}
 
       {/* Charts */}
       {summary && (

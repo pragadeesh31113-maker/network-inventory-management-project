@@ -1,4 +1,3 @@
-# backend/app/main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -9,7 +8,7 @@ from . import models # Import models to ensure tables are known to Base
 
 # --- Import Routers ---
 # Ensure all routers you intend to use are imported
-from .routers import auth, assets, hierarchy, onboarding, tasks, customers, lifecycle, dashboard, overview, topology
+from .routers import auth, assets, hierarchy, onboarding, tasks, customers, lifecycle, dashboard, overview, topology, ai # <-- ADDED 'ai'
 
 # --- Create Database Tables ---
 try:
@@ -60,9 +59,10 @@ app.include_router(customers.router, prefix="/api/customers", tags=["Customer Ma
 app.include_router(lifecycle.router, prefix="/api/lifecycle", tags=["Customer Lifecycle"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Admin Dashboard"])
 app.include_router(overview.router, prefix="/api/overview", tags=["Network Overview"])
-
-# --- THIS IS THE CRITICAL FIX for the 404 error ---
 app.include_router(topology.router, prefix="/api/topology", tags=["Network Topology"])
+
+# --- ADD THIS LINE FOR THE AI ROUTER ---
+app.include_router(ai.router, prefix="/api/ai", tags=["AI Assistant"])
 
 
 # --- Root Endpoint ---
