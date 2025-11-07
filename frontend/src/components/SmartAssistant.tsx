@@ -15,18 +15,22 @@ interface Message {
   text: string;
 }
 
-// These are the "prompt guides" from our plan
+// --- NEW: Updated Prompt Guides ---
 const plannerPrompts = [
+  "List pending customers",
+  "List all faulty devices",
   "Suggest 3 available ONTs",
-  "Who is connected to splitter SPL-CHN-ADY-01-01?",
-  "What is the hierarchy for customer...",
+  "Who is on splitter SPL-CHN-ADY-01-01?",
+  "Mark asset 'ONT-SN-...' as FAULTY",
 ];
 
 const techPrompts = [
+  "What are my pending tasks?",
   "Troubleshoot: No light on ONT",
-  "What are my pending tasks today?",
-  "Customer reports no connection",
+  "Mark task 1 as COMPLETED",
+  "What is the status of 'RTR-SN-...'?",
 ];
+// ---------------------
 
 export const SmartAssistant: React.FC = () => {
   const { user } = useAuth();
@@ -53,30 +57,58 @@ export const SmartAssistant: React.FC = () => {
       sender: 'user',
       text: input,
     };
-
-    setMessages(prev => [...prev, userMessage]);
+    
+    // --- NEW: Add user message and create history ---
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
     setInput('');
     setIsLoading(true);
 
+    // Create chat history for the AI (excluding the initial welcome message)
+    const history = newMessages
+      .filter(msg => msg.id !== 1) // Remove the first message
+      .map(msg => ({
+        role: msg.sender === 'user' ? 'user' : 'assistant',
+        content: msg.text
+      }));
+    // We only need history, not the current message (which is passed separately)
+    history.pop(); 
+    // --- END NEW ---
+
     try {
-      // This calls the backend endpoint we just built
+      // This calls the backend endpoint
       const response = await api.post('/api/ai/chat', {
         message: input,
+        history: history // <-- NEW: Send the conversation history
       });
+
+      let aiText: any = response.data.response;
+      if (typeof aiText === 'object') {
+        try {
+          aiText = JSON.stringify(aiText, null, 2);
+        } catch (e) {
+          aiText = String(aiText);
+        }
+      }
 
       const aiMessage: Message = {
         id: Date.now() + 1,
         sender: 'ai',
-        text: response.data.response,
+        text: String(aiText),
       };
       setMessages(prev => [...prev, aiMessage]);
 
-    } catch (err) {
+    } catch (err: any) {
       console.error("AI chat error:", err);
+      let errorText = "Sorry, I'm having trouble connecting to my brain right now. Please try again later.";
+      if (err.response && err.response.data && err.response.data.detail) {
+        errorText = `Error: ${err.response.data.detail}`;
+      }
+      
       const errorMessage: Message = {
         id: Date.now() + 1,
         sender: 'ai',
-        text: "Sorry, I'm having trouble connecting to my brain right now. Please try again later."
+        text: errorText,
       };
       setMessages(prev => [...prev, errorMessage]);
     } finally {
@@ -237,5 +269,4 @@ export const SmartAssistant: React.FC = () => {
   );
 };
 
-// This empty export is what fixes the TS1208 error
 export default SmartAssistant;

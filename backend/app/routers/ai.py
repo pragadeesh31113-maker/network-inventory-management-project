@@ -1,251 +1,178 @@
-# backend/app/routers/ai.py
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
-import google.generativeai as genai
-from google.protobuf.struct_pb2 import Struct
-# --- THIS IS THE CORRECT IMPORT for v0.8.5 ---
-from google.generativeai.types import GenerationConfig, Tool
-from google.generativeai.protos import Part
-# --- END FIX ---
-
+from pydantic import BaseModel, Field
+from openai import OpenAI 
 from sqlalchemy.orm import Session
 import json
+from typing import Optional, List, Dict
 
 from .. import deps, models, schemas
-from ..config import settings # Import our config
+from ..config import settings 
 from ..database import get_db
-from .. import ai_tools # <-- This is the correct import
+from .. import ai_tools 
 
 router = APIRouter()
 
-# --- 1. Define the Pydantic schemas (this is still good) ---
+# --- 1. Initialize OpenAI Client ---
+try:
+    client = OpenAI(api_key=settings.OPENAI_API_KEY)
+    MODEL_NAME = "gpt-4o-mini"
+    print(f"OpenAI client configured successfully. Using model: {MODEL_NAME}")
+except Exception as e:
+    print(f"FATAL ERROR: Could not configure OpenAI API. Check API key. Error: {e}")
+    client = None
+
+# --- 2. Define the Pydantic schemas for ALL tools ---
 class SuggestAssetsArgs(BaseModel):
     asset_type: str
     count: int
-
 class GetHierarchyArgs(BaseModel):
     customer_name_or_id: str
-
 class TroubleshootArgs(BaseModel):
     issue_description: str
+class ListDevicesArgs(BaseModel):
+    status: Optional[str] = Field(None, description="Filter by status: AVAILABLE, ASSIGNED, FAULTY, IN_REPAIR, RETIRED, IN_USE")
+    asset_type: Optional[str] = Field(None, description="Filter by type: ONT, ROUTER, SPLITTER, FDH")
+class GetSplitterDetailsArgs(BaseModel):
+    splitter_name: str = Field(..., description="The name of the splitter, e.g., 'SPL-CHN-ADY-01-01'")
+class GetTechnicianTasksArgs(BaseModel):
+    pass # No arguments needed
+class GetDeviceDetailsBySerialArgs(BaseModel):
+    serial_number: str = Field(..., description="The serial number of the asset, e.g., 'ONT-SN-123456'")
+class UpdateAssetStatusArgs(BaseModel):
+    serial_number: str = Field(..., description="The serial number of the asset to update.")
+    new_status: str = Field(..., description="The new status. Must be one of: AVAILABLE, FAULTY, IN_REPAIR, RETIRED")
+class UpdateTaskStatusArgs(BaseModel):
+    task_id: int = Field(..., description="The ID of the deployment task to update.")
+    new_status: str = Field(..., description="The new status. Must be one of: IN_PROGRESS, COMPLETED, FAILED")
 
-# --- 2. Define the tools for the Gemini model (NEW SCHEMA) ---
-# helper to convert a Pydantic model JSON schema -> genai protos.Schema
-def _pydantic_model_to_proto_schema(model_cls: type[BaseModel]):
-    """Try to build a genai Schema proto from a Pydantic model.
-    Return a proto message on success, or None on failure (caller should omit parameters)."""
-    try:
-        schema_dict = model_cls.model_json_schema()
-        s = Struct()
-        s.update(schema_dict)
 
-        SchemaProto = getattr(genai.protos, "Schema", None)
-        if SchemaProto is None:
-            return None
-
-        tried = []
-        for field in ("json_schema", "schema", "json"):
-            tried.append(field)
-            try:
-                proto = SchemaProto()
-                try:
-                    setattr(proto, field, s)
-                    return proto
-                except Exception:
-                    nested = getattr(proto, field)
-                    nested.CopyFrom(s)
-                    return proto
-            except Exception:
-                continue
-
-        # Last-resort copy to underlying pb objects if present
-        try:
-            proto = SchemaProto()
-            if hasattr(proto, "_pb") and hasattr(s, "_pb"):
-                proto._pb.CopyFrom(s._pb)
-                return proto
-        except Exception:
-            pass
-
-        # Conversion failed -> return None (do not raise)
-        print(f"Warning: could not build genai Schema proto for {model_cls.__name__}; tried fields: {tried}")
-        return None
-
-    except Exception as e:
-        print(f"Warning: exception while converting pydantic schema {model_cls}: {e}")
-        return None
-
-def _make_function_declaration(name: str, description: str, model_cls: type[BaseModel]):
-    params = _pydantic_model_to_proto_schema(model_cls)
-    kwargs = {"name": name, "description": description}
-    if params is not None:
-        kwargs["parameters"] = params
-    return genai.protos.FunctionDeclaration(**kwargs)
-
-gemini_tools = [
-    Tool(
-        function_declarations=[
-            _make_function_declaration(
-                'suggest_available_assets',
-                "Suggests available ONTs or Routers from the inventory for a planner to assign.",
-                SuggestAssetsArgs
-            ),
-            _make_function_declaration(
-                'get_customer_hierarchy',
-                "Finds a customer by their name or username and returns their full network path (FDH, Splitter, Port).",
-                GetHierarchyArgs
-            ),
-            _make_function_declaration(
-                'troubleshoot_install_issue',
-                "Provides troubleshooting steps for a field technician facing an issue (e.g., 'no light on ONT', 'slow speed').",
-                TroubleshootArgs
-            ),
-        ]
-    )
+# --- 3. Define tools in OpenAI's format ---
+openai_tools = [
+    {"type": "function", "function": {"name": "suggest_available_assets", "description": "Suggests available ONTs or Routers from the inventory for a planner to assign.", "parameters": SuggestAssetsArgs.model_json_schema()}},
+    {"type": "function", "function": {"name": "get_customer_hierarchy", "description": "Finds a *specific* customer by their name or username and returns their full network path (FDH, Splitter, Port).", "parameters": GetHierarchyArgs.model_json_schema()}},
+    {"type": "function", "function": {"name": "troubleshoot_install_issue", "description": "Provides troubleshooting steps for a field technician facing an issue (e.g., 'no light on ONT', 'slow speed').", "parameters": TroubleshootArgs.model_json_schema()}},
+    {"type": "function", "function": {"name": "list_devices", "description": "Lists all devices from the asset inventory, with optional filters for status or asset_type (e.g., 'list faulty devices', 'list all ONTs').", "parameters": ListDevicesArgs.model_json_schema()}},
+    {"type": "function", "function": {"name": "get_splitter_details", "description": "Gets the port-by-port connection details for a specific splitter.", "parameters": GetSplitterDetailsArgs.model_json_schema()}},
+    {"type": "function", "function": {"name": "get_technician_tasks", "description": "Gets a list of PENDING or IN_PROGRESS tasks for the *currently logged-in technician*.", "parameters": GetTechnicianTasksArgs.model_json_schema()}},
+    {"type": "function", "function": {"name": "get_device_details_by_serial", "description": "Finds a single asset by its serial number and returns its full details.", "parameters": GetDeviceDetailsBySerialArgs.model_json_schema()}},
+    {"type": "function", "function": {"name": "update_asset_status", "description": "WRITE ACTION: Updates the status of an asset (ONT, Router, FDH, or Splitter).", "parameters": UpdateAssetStatusArgs.model_json_schema()}},
+    {"type": "function", "function": {"name": "update_task_status", "description": "WRITE ACTION: Updates the status of a deployment task (e.g., to COMPLETED or FAILED).", "parameters": UpdateTaskStatusArgs.model_json_schema()}},
 ]
 
-# --- 3. Map tool names to our actual Python functions ---
+# --- 4. Map tool names ---
 AVAILABLE_TOOLS = {
     "suggest_available_assets": ai_tools.suggest_available_assets,
     "get_customer_hierarchy": ai_tools.get_customer_hierarchy,
     "troubleshoot_install_issue": ai_tools.troubleshoot_install_issue,
+    "list_devices": ai_tools.list_devices,
+    "get_splitter_details": ai_tools.get_splitter_details,
+    "get_technician_tasks": ai_tools.get_technician_tasks,
+    "get_device_details_by_serial": ai_tools.get_device_details_by_serial,
+    "update_asset_status": ai_tools.update_asset_status,
+    "update_task_status": ai_tools.update_task_status,
 }
 
-# --- 4. Configure the AI Model ---
-try:
-    genai.configure(api_key=settings.GEMINI_API_KEY)
-
-    # Helper: try to discover a usable model from the API, fall back to configured name
-    def _pick_gemini_model():
-        # prefer explicit configuration if provided
-        if getattr(settings, 'GEMINI_MODEL', None):
-            return settings.GEMINI_MODEL
-        try:
-            # List models from the API and pick one that likely supports generation/chat
-            available = genai.list_models()
-            for m in available:
-                name = getattr(m, 'name', None) or getattr(m, 'id', None) or str(m)
-                if not name:
-                    continue
-                low = name.lower()
-                # prefer models that include 'gemini' and are not fine-tunes
-                if ('gemini' in low and not any(x in low for x in ('eval','ft'))):
-                    return name
-                # accept models that contain 'chat' or 'generate'
-                if 'chat' in low or 'generate' in low:
-                    return name
-            # last resort: return the first model's name
-            if len(available) > 0:
-                first = available[0]
-                return getattr(first, 'name', None) or getattr(first, 'id', None) or str(first)
-        except Exception:
-            # Listing failed (possible permission or API mismatch) — rely on settings or None
-            return getattr(settings, 'GEMINI_MODEL', None)
-        return None
-
-    chosen_model_name = _pick_gemini_model()
-    if not chosen_model_name:
-        raise RuntimeError('No usable Gemini model found (check API access and settings.GEMINI_MODEL).')
-
-    model = genai.GenerativeModel(
-        chosen_model_name,
-        generation_config=GenerationConfig(temperature=0.0),
-        tools=gemini_tools
-    )
-
-    print(f"Gemini AI model configured successfully with tools. Using model: {chosen_model_name}")
-except Exception as e:
-    print(f"FATAL ERROR: Could not configure Gemini API or select model. Check API key and model availability. Error: {e}")
-    model = None
-
-# --- 5. Pydantic model for the request ---
+# --- 5. Pydantic model for the request (NOW WITH HISTORY) ---
+class ChatHistoryItem(BaseModel):
+    role: str # 'user' or 'assistant'
+    content: str
+    
 class ChatRequest(BaseModel):
     message: str
+    history: Optional[List[ChatHistoryItem]] = [] # <-- NEW
 
 @router.post("/chat", response_model=dict)
-async def handle_chat_request(
+def handle_chat_request(
     request: ChatRequest,
-    db: Session = Depends(get_db), # <-- We now need the DB session
+    db: Session = Depends(get_db), 
     current_user: models.User = Depends(deps.get_current_active_user)
 ):
     """
-    Handles a new chat message from any authenticated user.
-    This is now a tool-using agent.
+    Handles a new chat message using the OpenAI tool-using agent.
     """
-    if not model:
+    if not client:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="AI service is not configured or available."
         )
 
     try:
-        # We give the AI a system prompt based on the user's role
-        system_prompt = f"You are a helpful assistant for the {current_user.role} role."
-        if current_user.role == models.UserRole.PLANNER:
-            system_prompt += " Be concise and provide data to help them plan the network."
-        if current_user.role == models.UserRole.TECHNICIAN:
-            system_prompt += " Be clear and provide step-by-step instructions to help them in the field."
+        # --- 6. Set up the messages for OpenAI ---
+        tool_names = ", ".join(AVAILABLE_TOOLS.keys())
+        system_prompt = f"""
+You are an expert AI assistant for a network inventory system. 
+Your user has the role: {current_user.role}.
+You MUST use your available tools to answer questions about the network, customers, or assets.
+Your available tools are: [{tool_names}].
+You have "Read" tools (like list_devices) and "Write" tools (like update_asset_status).
+For ANY "Write" action, you MUST confirm with the user first by asking "Are you sure...?"
+Do not perform a write action until the user has confirmed.
+If the user asks a question you cannot answer with these tools, you MUST politely explain that you cannot perform that action and suggest an action you *can* do.
+
+IMPORTANT: Do not use Markdown formatting like **bold** or bullet points. Respond in plain, professional, human-readable text.
+"""
             
-        try:
-            # Prefer the module-level configured model instance
-            if model is not None:
-                # start a chat session with the role-based system instruction
-                try:
-                    chat = model.start_chat(enable_automatic_function_calling=False, system_instruction=system_prompt)
-                except TypeError:
-                    # Some SDK versions may not accept system_instruction on start_chat; try without it
-                    chat = model.start_chat(enable_automatic_function_calling=False)
-            else:
-                # As a last resort, construct a runtime model using the chosen model name or settings
-                runtime_model_name = globals().get('chosen_model_name') or getattr(settings, 'GEMINI_MODEL', None)
-                chat_model = genai.GenerativeModel(
-                    runtime_model_name,
-                    generation_config=GenerationConfig(temperature=0.0),
-                    tools=gemini_tools,
-                )
-                try:
-                    chat = chat_model.start_chat(enable_automatic_function_calling=False, system_instruction=system_prompt)
-                except TypeError:
-                    chat = chat_model.start_chat(enable_automatic_function_calling=False)
+        messages = [
+            {"role": "system", "content": system_prompt},
+            # --- NEW: Add chat history ---
+            *[{"role": item.role, "content": item.content} for item in request.history],
+            # --- END NEW ---
+            {"role": "user", "content": request.message}
+        ]
 
-        except Exception as e:
-            print(f"Error initializing chat session: {e}")
-            raise
-
-        response = await chat.send_message_async(request.message)
-        
-        # --- 6. Check if the AI wants to use a tool ---
-        function_call = response.candidates[0].content.parts[0].function_call
-        
-        if not function_call:
-            # No tool needed, just return the text response
-            return {"response": response.text}
-
-        # --- 7. AI wants to use a tool. Let's process it. ---
-        function_name = function_call.name
-        function_args = {key: value for key, value in function_call.args.items()}
-        
-        if function_name not in AVAILABLE_TOOLS:
-            raise HTTPException(status_code=400, detail=f"AI requested unknown tool: {function_name}")
-
-        # Call the actual Python function
-        tool_function = AVAILABLE_TOOLS[function_name]
-        
-        # Pass the 'db' session and the arguments to the tool
-        tool_result = tool_function(db=db, **function_args)
-        
-        # --- 8. Send the tool's result back to the AI ---
-        final_response = await chat.send_message_async(
-            Part.from_function_response(
-                name=function_name,
-                response={
-                    "result": tool_result
-                }
-            )
+        # --- 7. Call OpenAI API ---
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=messages,
+            tools=openai_tools,
+            tool_choice="auto" 
         )
         
-        # The AI will now generate a natural language response based on the tool's output
-        return {"response": final_response.text}
+        response_message = response.choices[0].message
+        
+        # --- 8. Check if the AI wants to use a tool ---
+        tool_calls = response_message.tool_calls
+        if not tool_calls:
+            return {"response": response_message.content}
+
+        # --- 9. AI wants to use a tool. Let's process it. ---
+        messages.append(response_message) 
+        
+        for tool_call in tool_calls:
+            function_name = tool_call.function.name
+            function_args = json.loads(tool_call.function.arguments)
+            
+            if function_name not in AVAILABLE_TOOLS:
+                raise HTTPException(status_code=400, detail=f"AI requested unknown tool: {function_name}")
+
+            tool_function = AVAILABLE_TOOLS[function_name]
+            
+            # --- Pass user_id to "write" and "technician" tools ---
+            if function_name in ["update_asset_status"]:
+                function_args["user_id"] = current_user.id
+            if function_name in ["get_technician_tasks"]:
+                 function_args["user_id"] = current_user.id
+                
+            if function_args:
+                tool_result = tool_function(db=db, **function_args)
+            else:
+                tool_result = tool_function(db=db)
+            # --- END ---
+
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tool_call.id,
+                "name": function_name,
+                "content": json.dumps(tool_result)
+            })
+
+        # --- 10. Send the tool's result back to the AI ---
+        final_response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=messages
+        )
+        
+        return {"response": final_response.choices[0].message.content}
         
     except Exception as e:
         print(f"Error during AI chat: {e}")
