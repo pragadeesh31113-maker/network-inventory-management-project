@@ -22,11 +22,15 @@ import os
 env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
 
 class Settings(BaseSettings):
-    OPENAI_API_KEY: str # <-- CHANGED from GEMINI_API_KEY
+    GEMINI_API_KEY: str | None = None
+    OPENAI_API_KEY: str | None = None
 
-    class Config:
-        env_file = env_path
-        env_file_encoding = 'utf-8'
+    # Use model_config so pydantic v2 reads the .env and ignores extra keys
+    model_config = {
+        "env_file": env_path,
+        "env_file_encoding": "utf-8",
+        "extra": "ignore",
+    }
 
 # This 'settings' object is what the rest of our app will import
 settings = Settings()

@@ -1,7 +1,7 @@
 // frontend/src/components/charts/AssetPieChart.tsx
 import React, { useState } from 'react';
 import { Box } from '@mui/material'; // Removed Typography
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 interface ChartData {
   name: string;
@@ -29,6 +29,12 @@ const COLORS: { [key: string]: string } = {
   ROUTER: '#82CA9D',     // Light Green
   SPLITTER: '#FF7F0E',  // Brighter Orange
   FDH: '#1F77B4',       // Deeper Blue
+  // Task status colors (ensure task chart isn't grey)
+  PENDING: '#FFBB28',
+  COMPLETED: '#00C49F',
+  IN_PROGRESS: '#0088FE',
+  FAILED: '#D32F2F',
+  CANCELLED: '#9E9E9E',
 };
 // ******************************************************
 
@@ -43,6 +49,16 @@ export const AssetPieChart: React.FC<AssetPieChartProps> = ({ data, onSliceClick
     setActiveIndex(-1);
   };
 
+  // If no meaningful data, render a friendly placeholder instead of an empty/grey pie
+  const total = data.reduce((acc, d) => acc + (Number(d.value) || 0), 0);
+  if (total === 0) {
+    return (
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300 }}>
+        <Box sx={{ color: '#757575' }}>No data available</Box>
+      </Box>
+    );
+  }
+
   return (
     // Box for positioning and sizing
     <Box sx={{ position: 'relative', width: '100%', height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -56,6 +72,7 @@ export const AssetPieChart: React.FC<AssetPieChartProps> = ({ data, onSliceClick
             outerRadius={100}   // <-- Size of the pie
             fill="#8884d8"      // Default fill (mostly overridden by Cells)
             dataKey="value"     // The key in 'data' representing the slice size
+            nameKey="name"
             stroke="none"       // No border between slices initially
             onMouseEnter={onPieEnter} // Trigger hover effect start
             onMouseLeave={onPieLeave} // Trigger hover effect end
@@ -100,6 +117,16 @@ export const AssetPieChart: React.FC<AssetPieChartProps> = ({ data, onSliceClick
             labelStyle={{ color: '#FFFFFF', fontWeight: 'bold' }} // White title text
             itemStyle={{ color: '#E0E0E0' }} // Light gray value text
             formatter={(value: number, name: string) => [`${value} assets`, name]} // Format tooltip content
+          />
+          {/* Legend to display labels and colors */}
+          <Legend
+            verticalAlign="bottom"
+            align="center"
+            layout="horizontal"
+            formatter={(value: any, entry: any) => {
+              const val = entry && entry.payload ? entry.payload.value : undefined;
+              return `${value}${val !== undefined ? ` (${val})` : ''}`;
+            }}
           />
         </PieChart>
       </ResponsiveContainer>
