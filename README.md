@@ -1,9 +1,3 @@
-Great project, Pragadeesh 👍
-Since this is already on GitHub, the **best and easiest way** to upload *steps, integration flow, and usage* is to convert what you wrote into a **clear, beginner-friendly `README.md`** with sections, diagrams (optional), and commands.
-
-Below is a **simple, professional structure** you can directly copy into your GitHub repository.
-
----
 
 # 📡 Network Inventory Management System
 
