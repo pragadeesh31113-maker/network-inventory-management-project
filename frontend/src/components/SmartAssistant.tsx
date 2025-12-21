@@ -8,6 +8,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import SendIcon from '@mui/icons-material/Send';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../api';
+import ReactMarkdown from 'react-markdown';
 
 interface Message {
   id: number;
@@ -57,7 +58,7 @@ export const SmartAssistant: React.FC = () => {
       sender: 'user',
       text: input,
     };
-    
+
     // --- NEW: Add user message and create history ---
     const newMessages = [...messages, userMessage];
     setMessages(newMessages);
@@ -72,7 +73,7 @@ export const SmartAssistant: React.FC = () => {
         content: msg.text
       }));
     // We only need history, not the current message (which is passed separately)
-    history.pop(); 
+    history.pop();
     // --- END NEW ---
 
     try {
@@ -104,7 +105,7 @@ export const SmartAssistant: React.FC = () => {
       if (err.response && err.response.data && err.response.data.detail) {
         errorText = `Error: ${err.response.data.detail}`;
       }
-      
+
       const errorMessage: Message = {
         id: Date.now() + 1,
         sender: 'ai',
@@ -121,7 +122,7 @@ export const SmartAssistant: React.FC = () => {
   };
 
   const getPrompts = () => {
-    switch(user?.role) {
+    switch (user?.role) {
       case 'PLANNER':
       case 'ADMIN':
         return plannerPrompts;
@@ -192,9 +193,14 @@ export const SmartAssistant: React.FC = () => {
                     maxWidth: '85%',
                   }}
                 >
-                  <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-                    {msg.text}
-                  </Typography>
+                  <Box sx={{
+                    '& p': { m: 0, mb: 1, '&:last-child': { mb: 0 } },
+                    '& ul, & ol': { m: 0, pl: 2, mb: 1 },
+                    '& li': { mb: 0.5 },
+                    '& strong': { fontWeight: 600 }
+                  }}>
+                    <ReactMarkdown>{msg.text}</ReactMarkdown>
+                  </Box>
                 </Paper>
               ))}
               {isLoading && (
@@ -208,25 +214,25 @@ export const SmartAssistant: React.FC = () => {
               <div ref={messagesEndRef} />
             </Stack>
           </Box>
-          
+
           {/* Prompt Guides */}
           {messages.length <= 1 && (
-             <Box sx={{ p: 2, flexShrink: 0, borderTop: '1px solid', borderColor: 'divider' }}>
-               <Typography variant="caption" color="textSecondary" sx={{ mb: 1, display: 'block' }}>
-                 Try asking me:
-               </Typography>
-               <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-                 {getPrompts().map(prompt => (
-                   <Chip
-                     key={prompt}
-                     label={prompt}
-                     onClick={() => handlePromptClick(prompt)}
-                     size="small"
-                     variant="outlined"
-                   />
-                 ))}
-               </Stack>
-             </Box>
+            <Box sx={{ p: 2, flexShrink: 0, borderTop: '1px solid', borderColor: 'divider' }}>
+              <Typography variant="caption" color="textSecondary" sx={{ mb: 1, display: 'block' }}>
+                Try asking me:
+              </Typography>
+              <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+                {getPrompts().map(prompt => (
+                  <Chip
+                    key={prompt}
+                    label={prompt}
+                    onClick={() => handlePromptClick(prompt)}
+                    size="small"
+                    variant="outlined"
+                  />
+                ))}
+              </Stack>
+            </Box>
           )}
 
           {/* Input Area */}
