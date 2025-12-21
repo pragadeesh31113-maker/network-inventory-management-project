@@ -1,108 +1,215 @@
-Network Inventory Management System - Project Documentation
-1. Project Overview
-The Network Inventory Management System is a comprehensive solution designed to manage telecommunications network assets, customer profiles, and deployment tasks. It features a modern web-based interface for administrators, planners, and technicians, powered by a robust backend API and integrated AI capabilities for intelligent assistance.
+Great project, Pragadeesh 👍
+Since this is already on GitHub, the **best and easiest way** to upload *steps, integration flow, and usage* is to convert what you wrote into a **clear, beginner-friendly `README.md`** with sections, diagrams (optional), and commands.
 
-2. System Architecture
-The project follows a decoupled client-server architecture:
+Below is a **simple, professional structure** you can directly copy into your GitHub repository.
 
-Backend: Built with FastAPI (Python), providing a high-performance RESTful API. It uses SQLAlchemy for ORM-based database interactions with SQLite.
-Frontend: Built with React (Node.js), utilizing Material UI for a responsive design and React Flow for network topology visualization.
-AI Integration: Embedded AI tools assist with asset selection, troubleshooting, and natural language queries about the network state.
-Technology Stack
-Component	Technology	Description
-Backend Framework	FastAPI	High-performance, easy-to-use Python web framework.
-Database	SQLite	Lightweight, serverless database (development/testing).
-ORM	SQLAlchemy	Python SQL toolkit and Object Relational Mapper.
-Frontend Library	React	JavaScript library for building user interfaces.
-UI Framework	Material UI (MUI)	React component library for faster and easier web development.
-Visualization	React Flow, Recharts	Libraries for building node-based graphs and charts.
-HTTP Client	Axios	Promise-based HTTP client for the browser and node.js.
-3. Backend Documentation
-3.1. Directory Structure
-app/main.py
-: Application entry point, CORS configuration, and router inclusion.
-app/models.py
-: SQLAlchemy database models defining the schema.
-app/schemas.py
-: Pydantic models for request/response validation.
-app/database.py
-: Database connection and session management.
-app/routers/: Modular API endpoints (Auth, Assets, Customers, etc.).
-app/ai_tools.py
-: Functions exposed to the AI assistant for interacting with the database.
-3.2. Key Data Models (
-models.py
-)
-User: System users with roles (ADMIN, PLANNER, TECHNICIAN, SUPPORT, CUSTOMER).
-CustomerProfile: Extended profile for customers, linking to assigned splitters and ports.
-Asset: Network devices (ONT, ROUTER, FDH, SPLITTER) with status tracking (AVAILABLE, ASSIGNED, FAULTY, etc.).
-Splitter & FDH: Network hierarchy elements. FDHs contain Splitters, which connect to Customers.
-DeploymentTask: Work orders for technicians to install or repair services.
-AssetHistory: Audit trail for all changes made to assets.
-3.3. AI Capabilities (
-ai_tools.py
-)
-The system includes an AI assistant capable of performing specific actions:
+---
 
-suggest_available_assets
-: Recommends available ONTs or Routers for assignment.
-get_customer_hierarchy
-: Traces the network path (Customer -> Splitter -> FDH) for a given user.
-troubleshoot_install_issue
-: Provides step-by-step troubleshooting guides for common issues (e.g., "red light", "slow speed").
-list_devices
-: Advanced search for devices by status or type, including calculated "IN_USE" status.
-get_splitter_details
-: Visualizes port usage on a specific splitter.
-update_asset_status
-: Allows the AI (and authorized users) to update asset status safely.
-3.4. API Routers
-/api/auth: Login and token management.
-/api/assets: CRUD operations for network assets.
-/api/hierarchy: Management of FDHs and Splitters.
-/api/onboard: Workflows for adding new customers.
-/api/tasks: Task management for technicians.
-/api/topology: Data for network graph visualization.
-/api/ai: Endpoint for AI chat interactions.
-4. Frontend Documentation
-4.1. Directory Structure
-src/components/: Reusable UI components.
-src/pages/: Main application views (Dashboard, Inventory, Topology, etc.).
-src/services/: API service modules using Axios.
-src/context/: Global state management (e.g., AuthContext).
-4.2. Key Features
-Admin Dashboard: Overview of network health, recent tasks, and asset statistics.
-Network Topology: Interactive graph showing relationships between FDHs, Splitters, and Customers.
-Asset Inventory: Searchable and filterable list of all network assets.
-Technician Portal: View for technicians to see and update their assigned tasks.
-AI Chat Interface: Chat window to interact with the system using natural language.
-5. Setup & Installation Guide
-Prerequisites
-Python 3.8+
-Node.js 14+ & npm
-5.1. Backend Setup
-Navigate to the backend directory:
+# 📡 Network Inventory Management System
+
+A full-stack **Network Inventory Management System for a Telecom Company** with role-based access, network topology visualization, task management, and an AI-powered assistant.
+
+---
+
+## 🚀 Features Overview
+
+* Role-Based Access Control (Admin, Planner, Technician, Support, Customer)
+* Network Asset Inventory Management
+* Customer Onboarding & Lifecycle Tracking
+* Field Technician Task Management
+* Network Topology Visualization (FDH → Splitter → Customer)
+* AI Assistant for troubleshooting & operations
+* Modern Dashboard & Analytics
+
+---
+
+## 🏗️ System Architecture
+
+```
+Frontend (React + MUI)
+        |
+        |  REST API (Axios)
+        |
+Backend (FastAPI)
+        |
+        |-- SQLAlchemy ORM
+        |-- SQLite (dev)
+        |-- LangGraph + Gemini AI
+```
+
+---
+
+## 🧑‍💼 User Roles & Responsibilities
+
+| Role           | Responsibilities                   |
+| -------------- | ---------------------------------- |
+| **Admin**      | Full access, dashboards, analytics |
+| **Planner**    | Network hierarchy, onboarding      |
+| **Technician** | Deployment tasks, field assets     |
+| **Support**    | Customer issues, troubleshooting   |
+| **Customer**   | View plan & connection status      |
+
+---
+
+## 🧰 Technology Stack
+
+### Backend
+
+* **FastAPI (Python)**
+* **SQLAlchemy ORM**
+* **SQLite** (Development DB)
+* **JWT Authentication**
+* **LangGraph** (AI workflows)
+* **Google Gemini (gemini-2.5-flash)**
+* **LangChain**
+
+### Frontend
+
+* **React (TypeScript)**
+* **Material UI**
+* **React Router v6**
+* **Axios**
+* **React Flow** (Topology)
+* **Recharts** (Analytics)
+* **Dagre / ELK.js** (Graph layout)
+
+---
+
+## 📂 Project Structure
+
+### Backend (`backend/app/`)
+
+```
+app/
+│── main.py              # App entry point
+│── models.py            # Database models
+│── routers/
+│   ├── auth.py          # Authentication
+│   ├── ai.py            # AI assistant
+│   ├── assets.py        # Asset CRUD
+│   ├── topology.py      # Network visualization
+│   ├── tasks.py         # Technician tasks
+│   └── onboarding.py    # Customer onboarding
+```
+
+### Frontend (`frontend/src/`)
+
+```
+src/
+│── App.tsx              # Routing & layouts
+│── pages/
+│   ├── AdminDashboard.tsx
+│   ├── PlannerDashboard.tsx
+│   ├── TechnicianDashboard.tsx
+│   └── SupportDashboard.tsx
+│── components/          # Reusable UI
+│── context/AuthContext  # Auth state
+```
+
+---
+
+## 🤖 AI Assistant Integration
+
+### How It Works
+
+* Endpoint: `/api/ai/chat`
+* Maintains conversation using `thread_id`
+* Injects **User Role & User ID** into system prompt
+* Executes actions via tool bindings
+
+### Capabilities
+
+* 🔧 Troubleshoot installations
+* 📦 Suggest available assets
+* 🔍 Fetch device by serial number
+* 🔄 Update task/asset status
+* 🗂️ Access FDH / Splitter hierarchy
+
+---
+
+## ⚙️ Installation & Setup
+
+### 🔹 Backend Setup
+
+```bash
 cd backend
-Create a virtual environment:
-python -m venv venv
-Activate the virtual environment:
-Windows: venv\Scripts\activate
-Mac/Linux: source venv/bin/activate
-Install dependencies:
 pip install -r requirements.txt
-Run the server:
-fastapi dev app/main.py
-The API will be available at http://localhost:8000.
-5.2. Frontend Setup
-Navigate to the frontend directory:
+uvicorn app.main:app --reload
+```
+
+Runs on: **[http://localhost:8000](http://localhost:8000)**
+
+---
+
+### 🔹 Frontend Setup
+
+```bash
 cd frontend
-Install dependencies:
 npm install
-Start the development server:
 npm start
-The application will run at http://localhost:3000.
-6. User Roles & Workflows
-Admin: Full access to all modules. Can manage users, view all assets, and oversee operations.
-Planner: Focuses on network expansion, managing FDHs and Splitters, and assigning resources.
-Technician: Receives deployment tasks, updates task status, and troubleshoots on-site issues.
-Customer: (Future scope) View plan details and request support.
+```
+
+Runs on: **[http://localhost:3000](http://localhost:3000)**
+
+> ⚠️ Webpack warnings can be ignored in development.
+
+---
+
+## 📑 API Documentation
+
+Once backend is running, open:
+
+```
+http://localhost:8000/docs
+```
+
+* Interactive Swagger UI
+* Test endpoints directly
+
+---
+
+## 🔄 Typical Workflow (Easy Explanation)
+
+1. **Admin** creates users & views analytics
+2. **Planner** designs network topology (FDH → Splitter)
+3. **Customer** is onboarded to a splitter port
+4. **Technician** receives installation task
+5. **AI Assistant** helps with troubleshooting
+6. **Support** resolves customer issues
+
+---
+
+## 📌 Future Enhancements
+
+* PostgreSQL for production
+* Real-time alerts (WebSockets)
+* Mobile app for technicians
+* GIS-based map integration
+* Fine-grained AI permissions
+
+---
+
+## 🧑‍💻 Author
+
+**Pragadeesh**
+College Project – Telecom Network Management System
+
+---
+
+## ⭐ Tips to Make It Look Even Better on GitHub
+
+✅ Add **screenshots** (dashboards, topology map)
+✅ Add a **short demo GIF or video link**
+✅ Add `architecture.png` diagram
+✅ Pin the repository on your profile
+
+---
+
+If you want, I can:
+
+* Convert this into a **perfect GitHub README.md**
+* Create a **system architecture diagram**
+* Write **resume-ready project description**
+* Help you explain this in **interviews**
+
+Just tell me 👍
